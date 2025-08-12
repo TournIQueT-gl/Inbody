@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>InBody Tracker</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#111111" />
+  <style>
+    :root { --bg:#0f1115; --card:#161a22; --muted:#8a8fa3; --text:#eef1ff; --accent:#5b8cff; --green:#3ddc84; --red:#ff6b6b; }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+    .wrap{max-width:720px;margin:0 auto;padding:16px}
+    .row{display:flex;gap:8px}
+    .card{background:var(--card);border-radius:16px;padding:12px;box-shadow:0 6px 16px rgba(0,0,0,.25)}
+    .title{font-weight:700;font-size:20px;margin:8px 0 12px}
+    label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+    input,textarea,button,select{width:100%;padding:12px;border-radius:12px;border:1px solid #2a3142;background:#0f1320;color:var(--text);outline:none}
+    button{background:var(--accent);border:none;font-weight:600}
+    button.ghost{background:#0f1320}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:8px;border-bottom:1px solid #273149;font-size:12px}
+    th{color:var(--muted);text-align:left}
+    .stat{display:flex;flex-direction:column;gap:2px}
+    .kpi{font-size:22px;font-weight:800}
+    .delta{font-size:12px}
+    .delta.up{color:var(--red)}
+    .delta.down{color:var(--green)}
+    .hint{color:var(--muted);font-size:12px}
+    .actions{display:flex;gap:8px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    @media (min-width:700px){ .grid{grid-template-columns:1fr 1fr 1fr 1fr} }
+  </style>
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <h1 style="margin:12px 4px;">InBody Tracker</h1>
+    <p class="hint" style="margin:0 4px 12px">Local only. Your data is stored on-device (localStorage). Add to Home Screen for an app-like experience.</p>
+    <div class="row">
+      <div class="card" style="flex:1">
+        <div class="title">Profile</div>
+        <label>Height (cm)</label>
+        <input id="height" type="number" inputmode="decimal" placeholder="e.g., 173"/>
+        <p class="hint">Used to auto-calc BMI.</p>
+      </div>
+      <div class="card" style="flex:1">
+        <div class="title">Quick Stats</div>
+        <div class="row">
+          <div class="stat" style="flex:1">
+            <div class="kpi" id="kpiWeight">—</div>
+            <div class="hint">Latest Weight (kg)</div>
+            <div class="delta" id="deltaWeight"></div>
+          </div>
+          <div class="stat" style="flex:1">
+            <div class="kpi" id="kpiBodyFat">—</div>
+            <div class="hint">Latest Body Fat %</div>
+            <div class="delta" id="deltaBodyFat"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:8px">
+      <div class="title">Add / Edit Entry</div>
+      <div class="grid">
+        <div><label>Date</label><input id="date" type="date"/></div>
+        <div><label>Weight (kg)</label><input id="weight" type="number" inputmode="decimal" step="0.1"/></div>
+        <div><label>Body Fat %</label><input id="bodyFat" type="number" inputmode="decimal" step="0.1"/></div>
+        <div><label>Muscle (kg)</label><input id="muscle" type="number" inputmode="decimal" step="0.1"/></div>
+        <div><label>Water %</label><input id="water" type="number" inputmode="decimal" step="0.1"/></div>
+        <div><label>Visceral Fat</label><input id="visceral" type="number" inputmode="decimal" step="0.1"/></div>
+        <div><label>BMR</label><input id="bmr" type="number" inputmode="numeric" step="1"/></div>
+        <div><label>BMI</label><input id="bmi" type="text" disabled/></div>
+        <div style="grid-column: 1 / -1"><label>Notes</label><textarea id="notes" rows="2" placeholder="Optional (e.g., training phase, diet change)"></textarea></div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="saveBtn">Save Entry</button>
+        <button class="ghost" id="cancelBtn">Cancel</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:8px">
+      <div class="title">Progress Chart</div>
+      <canvas id="chart" height="260"></canvas>
+      <p class="hint">Weight (kg) primary axis. Body Fat % secondary axis.</p>
+    </div>
+
+    <div class="card" style="margin-top:8px">
+      <div class="title">Entries</div>
+      <div style="overflow-x:auto">
+        <table id="table">
+          <thead>
+            <tr>
+              <th>Date</th><th>Weight</th><th>Body Fat %</th><th>Muscle</th><th>Water</th><th>Visceral</th><th>BMR</th><th>BMI</th><th>Notes</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:8px">
+      <button class="ghost" id="exportBtn" style="flex:1">Export JSON</button>
+      <input type="file" id="importFile" accept="application/json" style="display:none"/>
+      <button class="ghost" id="importBtn" style="flex:1">Import</button>
+    </div>
+
+    <p class="hint" style="margin-top:8px">Tip: Export regularly. PWA works offline after first load.</p>
+  </div>
+
+<script>
+const LS_ENTRIES = 'inbody.entries.v1';
+const LS_HEIGHT = 'inbody.height.v1';
+let editingId = null;
+
+const els = {
+  height: document.getElementById('height'),
+  date: document.getElementById('date'),
+  weight: document.getElementById('weight'),
+  bodyFat: document.getElementById('bodyFat'),
+  muscle: document.getElementById('muscle'),
+  water: document.getElementById('water'),
+  visceral: document.getElementById('visceral'),
+  bmr: document.getElementById('bmr'),
+  bmi: document.getElementById('bmi'),
+  notes: document.getElementById('notes'),
+  saveBtn: document.getElementById('saveBtn'),
+  cancelBtn: document.getElementById('cancelBtn'),
+  exportBtn: document.getElementById('exportBtn'),
+  importBtn: document.getElementById('importBtn'),
+  importFile: document.getElementById('importFile'),
+  tableBody: document.querySelector('#table tbody'),
+  kpiWeight: document.getElementById('kpiWeight'),
+  deltaWeight: document.getElementById('deltaWeight'),
+  kpiBodyFat: document.getElementById('kpiBodyFat'),
+  deltaBodyFat: document.getElementById('deltaBodyFat'),
+};
+
+function loadEntries() {
+  try { return JSON.parse(localStorage.getItem(LS_ENTRIES)) || [] } catch { return [] }
+}
+function saveEntries(list) { localStorage.setItem(LS_ENTRIES, JSON.stringify(list)) }
+function uid() { return Math.random().toString(36).slice(2) }
+
+function resetForm() {
+  editingId = null;
+  const today = new Date().toISOString().slice(0,10);
+  els.date.value = today;
+  ['weight','bodyFat','muscle','water','visceral','bmr','notes'].forEach(id => els[id].value = '');
+  updateBMI();
+}
+function updateBMI() {
+  const w = parseFloat(els.weight.value);
+  const h = parseFloat(els.height.value) / 100;
+  els.bmi.value = (w && h) ? (w/(h*h)).toFixed(1) : '';
+}
+['weight','height'].forEach(id => document.getElementById(id).addEventListener('input', updateBMI));
+
+function render() {
+  const entries = loadEntries().sort((a,b) => a.date.localeCompare(b.date));
+  // KPIs
+  const latest = entries[entries.length-1], prev = entries[entries.length-2];
+  if (latest?.weightKg != null) {
+    els.kpiWeight.textContent = latest.weightKg.toFixed(1);
+    if (prev?.weightKg != null) {
+      const d = latest.weightKg - prev.weightKg;
+      els.deltaWeight.textContent = `Since last: ${d>0?'+':''}${d.toFixed(1)}kg`;
+      els.deltaWeight.className = 'delta ' + (d>0?'up':d<0?'down':'')
+    } else { els.deltaWeight.textContent=''; els.deltaWeight.className='delta'}
+  } else { els.kpiWeight.textContent='—'; els.deltaWeight.textContent='' }
+  if (latest?.bodyFatPct != null) {
+    els.kpiBodyFat.textContent = latest.bodyFatPct.toFixed(1);
+    if (prev?.bodyFatPct != null) {
+      const d = latest.bodyFatPct - prev.bodyFatPct;
+      els.deltaBodyFat.textContent = `Since last: ${d>0?'+':''}${d.toFixed(1)}%`;
+      els.deltaBodyFat.className = 'delta ' + (d>0?'up':d<0?'down':'')
+    } else { els.deltaBodyFat.textContent=''; els.deltaBodyFat.className='delta'}
+  } else { els.kpiBodyFat.textContent='—'; els.deltaBodyFat.textContent='' }
+
+  // Table
+  els.tableBody.innerHTML = '';
+  for (const e of entries) {
+    const tr = document.createElement('tr');
+    function td(v){ const x=document.createElement('td'); x.textContent=v; return x }
+    tr.appendChild(td(e.date));
+    tr.appendChild(td(nf(e.weightKg)));
+    tr.appendChild(td(nf(e.bodyFatPct)));
+    tr.appendChild(td(nf(e.muscleKg)));
+    tr.appendChild(td(nf(e.waterPct)));
+    tr.appendChild(td(nf(e.visceralFat)));
+    tr.appendChild(td(e.bmr ?? '—'));
+    tr.appendChild(td(e.bmi ?? '—'));
+    const notes = document.createElement('td'); notes.textContent = e.notes || '—'; tr.appendChild(notes);
+    const actions = document.createElement('td'); actions.className='actions';
+    const btnEdit = document.createElement('button'); btnEdit.textContent='Edit'; btnEdit.className='ghost';
+    btnEdit.onclick = () => { editingId=e.id; fillForm(e) };
+    const btnDel = document.createElement('button'); btnDel.textContent='Delete'; btnDel.className='ghost';
+    btnDel.onclick = () => { if (confirm('Delete this entry?')) { delEntry(e.id) } };
+    actions.appendChild(btnEdit); actions.appendChild(btnDel);
+    tr.appendChild(actions);
+    els.tableBody.appendChild(tr);
+  }
+
+  drawChart(entries);
+}
+function nf(x){ return x==null? '—' : Number(x).toFixed(1) }
+function fillForm(e){
+  els.date.value = e.date;
+  els.weight.value = e.weightKg ?? '';
+  els.bodyFat.value = e.bodyFatPct ?? '';
+  els.muscle.value = e.muscleKg ?? '';
+  els.water.value = e.waterPct ?? '';
+  els.visceral.value = e.visceralFat ?? '';
+  els.bmr.value = e.bmr ?? '';
+  els.notes.value = e.notes ?? '';
+  updateBMI();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function delEntry(id){
+  const list = loadEntries();
+  const out = list.filter(x=>x.id!==id);
+  saveEntries(out); render();
+}
+
+els.saveBtn.onclick = () => {
+  const list = loadEntries();
+  const obj = {
+    id: editingId || uid(),
+    date: els.date.value,
+    weightKg: parseFloat(els.weight.value),
+    bodyFatPct: els.bodyFat.value? parseFloat(els.bodyFat.value): null,
+    muscleKg: els.muscle.value? parseFloat(els.muscle.value): null,
+    waterPct: els.water.value? parseFloat(els.water.value): null,
+    visceralFat: els.visceral.value? parseFloat(els.visceral.value): null,
+    bmr: els.bmr.value? parseInt(els.bmr.value): null,
+    bmi: els.bmi.value? parseFloat(els.bmi.value): null,
+    notes: els.notes.value?.trim() || ''
+  };
+  if (!obj.date) return alert('Pick a date');
+  if (!obj.weightKg) return alert('Weight is required');
+  const others = list.filter(x=>x.id!==obj.id);
+  others.push(obj);
+  others.sort((a,b)=>a.date.localeCompare(b.date));
+  saveEntries(others);
+  resetForm();
+  render();
+};
+els.cancelBtn.onclick = () => { resetForm() };
+
+els.exportBtn.onclick = () => {
+  const data = JSON.stringify({ heightCm: parseFloat(els.height.value)||null, entries: loadEntries() }, null, 2);
+  const blob = new Blob([data], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `inbody-data-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+els.importBtn.onclick = () => els.importFile.click();
+els.importFile.onchange = (ev) => {
+  const f = ev.target.files?.[0]; if(!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const pkg = JSON.parse(reader.result);
+      if (pkg.heightCm) { els.height.value = pkg.heightCm; localStorage.setItem(LS_HEIGHT, pkg.heightCm) }
+      if (Array.isArray(pkg.entries)) { saveEntries(pkg.entries) }
+      render();
+    }catch(e){ alert('Invalid JSON') }
+  };
+  reader.readAsText(f);
+};
+
+function drawChart(entries){
+  const ctx = document.getElementById('chart');
+  if (!window._chart){
+    window._chart = new Chart(ctx, {
+      type:'line',
+      data:{ labels: [], datasets: [{
+        label:'Weight (kg)',
+        data: [], tension: 0.35, yAxisID: 'y'
+      }, {
+        label:'Body Fat %',
+        data: [], tension: 0.35, yAxisID: 'y1'
+      }]},
+      options:{
+        responsive:true,
+        scales:{ y:{ position:'left' }, y1:{ position:'right', grid:{ drawOnChartArea:false } } },
+        plugins:{ legend:{ display:true } }
+      }
+    });
+  }
+  const labels = entries.map(e=>e.date);
+  const weight = entries.map(e=>e.weightKg ?? null);
+  const bodyFat = entries.map(e=>e.bodyFatPct ?? null);
+  window._chart.data.labels = labels;
+  window._chart.data.datasets[0].data = weight;
+  window._chart.data.datasets[1].data = bodyFat;
+  window._chart.update();
+}
+
+// Init
+(function(){
+  // set today
+  document.getElementById('date').value = new Date().toISOString().slice(0,10);
+  const savedH = localStorage.getItem(LS_HEIGHT);
+  if (savedH) els.height.value = savedH;
+  els.height.addEventListener('input', ()=> localStorage.setItem(LS_HEIGHT, els.height.value));
+  // render
+  render();
+  // PWA
+  if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js') }
+})();
+</script>
+</body>
+</html>
