@@ -3,12 +3,19 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"/>
-<title>متابعة إنبودي Ultra</title>
+<title>متابعة إنبودي Ultra (Safe)</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0b0e14"/>
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=5">
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script defer src="app.js"></script>
+<script>
+// hard-bust old service workers on first load of v5
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(rs => Promise.all(rs.map(r => r.unregister()))).then(()=>{
+    navigator.serviceWorker.register('sw.js?v=5');
+  });
+}
+</script>
 </head>
 <body>
 <div class="wrap">
@@ -165,5 +172,7 @@
   <button class="tab" data-view="history">قراءات</button>
   <button class="tab" data-view="settings">إعدادات</button>
 </nav>
+
+<script src="safe-app.js?v=5"></script>
 </body>
 </html>
