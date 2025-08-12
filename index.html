@@ -6,42 +6,9 @@
 <title>متابعة إنبودي Ultra</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0b0e14"/>
-<style>
-:root{
-  --bg:#0b0e14; --surface:#101521; --card:#141a2a; --muted:#8a92a6; --text:#eef1ff;
-  --accent:#5b8cff; --green:#3ddc84; --red:#ff6b6b; --ring:#1f2a44; --border:#1a2236;
-  --shadow:0 8px 20px rgba(0,0,0,.22);
-}
-[data-theme="light"]{
-  --bg:#f7f9fd; --surface:#ffffff; --card:#ffffff; --muted:#55607a; --text:#0b0e14;
-  --accent:#3d6dff; --green:#2dbd73; --red:#e05050; --ring:#dfe6ff; --border:#e7eaf5;
-  --shadow:0 6px 16px rgba(0,0,0,.08);
-}
-*{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,'Noto Kufi Arabic',sans-serif;background:var(--bg);color:var(--text)}
-.wrap{max-width:980px;margin:0 auto;padding:16px;padding-bottom:80px}
-.card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:14px;box-shadow:var(--shadow)}
-.title{font-weight:800;font-size:20px;margin:6px 0 12px}
-label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
-input,textarea,button,select{width:100%;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--text);outline:none}
-button{background:var(--accent);border:none;font-weight:700;letter-spacing:.2px}
-button.ghost{background:transparent}
-table{width:100%;border-collapse:collapse} th,td{padding:8px;border-bottom:1px solid var(--border);font-size:12px} th{color:var(--muted);text-align:right}
-.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px} @media (max-width:700px){ .kpis{grid-template-columns:repeat(2,1fr)}}
-.kpi{padding:12px;border-radius:16px;background:var(--surface);border:1px solid var(--border)}
-.kpi .h{font-size:12px;color:var(--muted)} .kpi .v{font-size:24px;font-weight:900} .delta{font-size:12px;margin-top:2px}.delta.up{color:var(--red)}.delta.down{color:var(--green)}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px} @media (max-width:700px){ .grid{grid-template-columns:1fr}}
-.ring{width:140px;height:140px;border-radius:50%;border:10px solid var(--ring);position:relative;display:flex;align-items:center;justify-content:center;margin:auto}
-.ring>span{font-weight:900} .ring .fill{position:absolute;inset:-10px;border-radius:50%;border:10px solid var(--accent);clip-path:polygon(50% 50%, 50% 0, 50% 0);transform:rotate(-90deg)}
-.toolbar{display:flex;gap:12px;align-items:center;justify-content:space-between} .tag{font-size:11px;color:var(--muted)}
-/* Bottom Tabs */
-.tabs{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);display:flex;gap:6px;padding:8px 12px;justify-content:space-between}
-.tab{flex:1;padding:10px;border-radius:12px;border:1px solid transparent;background:transparent} .tab.active{background:var(--accent);color:#fff}
-.view{display:none} .view.active{display:block}
-.chips{display:flex;gap:6px;flex-wrap:wrap}
-.chip{padding:8px 10px;border-radius:999px;border:1px solid var(--border);background:var(--surface);font-size:12px} .chip.active{background:var(--accent);color:#fff;border-color:transparent}
-.search{display:flex;gap:8px;align-items:center}
-</style>
+<link rel="stylesheet" href="styles.css">
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script defer src="app.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -56,7 +23,6 @@ table{width:100%;border-collapse:collapse} th,td{padding:8px;border-bottom:1px s
     </div>
   </div>
 
-  <!-- Dashboard -->
   <section class="view" id="view-dashboard">
     <div class="kpis">
       <div class="kpi"><div class="h">آخر وزن</div><div class="v" id="kpiWeight">—</div><div class="delta" id="deltaWeight"></div></div>
@@ -78,7 +44,6 @@ table{width:100%;border-collapse:collapse} th,td{padding:8px;border-bottom:1px s
     </div>
   </section>
 
-  <!-- Add -->
   <section class="view" id="view-add">
     <div class="card">
       <div class="title">إضافة / تعديل قراءة</div>
@@ -105,7 +70,6 @@ table{width:100%;border-collapse:collapse} th,td{padding:8px;border-bottom:1px s
     </div>
   </section>
 
-  <!-- Goals -->
   <section class="view" id="view-goals">
     <div class="card">
       <div class="title">أهداف اللياقة</div>
@@ -123,7 +87,6 @@ table{width:100%;border-collapse:collapse} th,td{padding:8px;border-bottom:1px s
     </div>
   </section>
 
-  <!-- Water -->
   <section class="view" id="view-water">
     <div class="card">
       <div class="title">ماء اليوم</div>
@@ -142,14 +105,13 @@ table{width:100%;border-collapse:collapse} th,td{padding:8px;border-bottom:1px s
         <button id="waterReset" class="ghost" style="flex:1">إعادة ضبط اليوم</button>
         <button id="waterNotify" style="flex:1">تفعيل تذكير الماء</button>
       </div>
-      <p class="tag">التذكير يعمل داخل التطبيق عند فتحه. للحصول على إشعارات في الخلفية على iOS نحتاج Web Push (مش مفعّل هنا حسب طلبك).</p>
+      <p class="tag">التذكير يعمل داخل التطبيق عند فتحه. لا إشعارات خلفية.</p>
       <div class="search" style="margin-top:6px">
         <button id="icsBtn" class="ghost" style="flex:1">تذكير تقويم كل ساعتين (ICS)</button>
       </div>
     </div>
   </section>
 
-  <!-- History -->
   <section class="view" id="view-history">
     <div class="card">
       <div class="title">القراءات</div>
@@ -179,7 +141,6 @@ table{width:100%;border-collapse:collapse} th,td{padding:8px;border-bottom:1px s
     </div>
   </section>
 
-  <!-- Settings -->
   <section class="view" id="view-settings">
     <div class="card">
       <div class="title">الإعدادات</div>
@@ -196,7 +157,6 @@ table{width:100%;border-collapse:collapse} th,td{padding:8px;border-bottom:1px s
   </section>
 </div>
 
-<!-- Bottom Tabs -->
 <nav class="tabs">
   <button class="tab" data-view="dashboard">لوحة</button>
   <button class="tab" data-view="add">إضافة</button>
@@ -205,264 +165,5 @@ table{width:100%;border-collapse:collapse} th,td{padding:8px;border-bottom:1px s
   <button class="tab" data-view="history">قراءات</button>
   <button class="tab" data-view="settings">إعدادات</button>
 </nav>
-
-<script>
-// ===== Storage Keys (v3) + Migration from older keys
-const LS = {
-  ENTRIES: 'inbody.entries.v3',
-  HEIGHT: 'inbody.height.v3',
-  GOALS: 'inbody.goals.v3',
-  WATER: 'inbody.water.v3',
-  THEME: 'inbody.theme.v3',
-  PIN: 'inbody.pin.v3'
-};
-// Migrate from v1/v2 on first load
-(function migrate(){
-  if(localStorage.getItem(LS.ENTRIES)) return;
-  const cands = ['inbody.entries.v2','inbody.entries.v1'];
-  for(const k of cands){ const v = localStorage.getItem(k); if(v){ localStorage.setItem(LS.ENTRIES, v); break } }
-  const h = localStorage.getItem('inbody.height.v2')||localStorage.getItem('inbody.height.v1'); if(h) localStorage.setItem(LS.HEIGHT, h);
-  const g = localStorage.getItem('inbody.goals.v2')||localStorage.getItem('inbody.goals.v1'); if(g) localStorage.setItem(LS.GOALS, g);
-  const w = localStorage.getItem('inbody.water.v2')||localStorage.getItem('inbody.water.v1'); if(w) localStorage.setItem(LS.WATER, w);
-})();
-
-// ===== Helpers
-const $ = s => document.querySelector(s);
-const $$ = s => document.querySelectorAll(s);
-function todayISO(){ return new Date().toISOString().slice(0,10) }
-function parseF(v){ const x = parseFloat(v); return Number.isFinite(x)? x : null }
-function uid(){ return Math.random().toString(36).slice(2) }
-function nf(x){ return x==null? '—' : Number(x).toFixed(1) }
-function save(key, val){ localStorage.setItem(key, JSON.stringify(val)) }
-function load(key, fallback=null){ try{ const v = localStorage.getItem(key); return v? JSON.parse(v) : fallback }catch{ return fallback } }
-
-// ===== Tabs
-const tabs = $$('.tab');
-const views = ['dashboard','add','goals','water','history','settings'];
-function show(v){ views.forEach(id => { const el = document.getElementById('view-'+id); if(el) el.classList.toggle('active', id===v) }); tabs.forEach(t=>t.classList.toggle('active', t.dataset.view===v)); location.hash = v; }
-tabs.forEach(t => t.addEventListener('click', () => show(t.dataset.view)));
-window.addEventListener('hashchange', () => show(location.hash.replace('#','') || 'dashboard'));
-
-// ===== Theme
-function setTheme(name){
-  document.documentElement.setAttribute('data-theme', name);
-  save(LS.THEME, name);
-  $('#themeName').textContent = (name === 'light'? 'فاتح' : 'غامق');
-}
-const pref = load(LS.THEME, (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'));
-setTheme(pref);
-$('#btnTheme').onclick = () => setTheme(document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
-
-// ===== Install prompt
-let deferredPrompt = null;
-window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; $('#btnInstall').disabled = false; });
-$('#btnInstall').onclick = async () => { if (deferredPrompt){ deferredPrompt.prompt(); deferredPrompt = null; } };
-
-// ===== Elements
-const el = {
-  date: $('#date'), weight: $('#weight'), bodyFat: $('#bodyFat'), muscle: $('#muscle'),
-  water: $('#water'), visceral: $('#visceral'), bmr: $('#bmr'), bmi: $('#bmi'), notes: $('#notes'),
-  saveBtn: $('#saveBtn'), cancelBtn: $('#cancelBtn'),
-  kpiWeight: $('#kpiWeight'), kpiBodyFat: $('#kpiBodyFat'), kpiBMI: $('#kpiBMI'),
-  deltaWeight: $('#deltaWeight'), deltaBodyFat: $('#deltaBodyFat'),
-  kpiGoal: $('#kpiGoal'), deltaGoal: $('#deltaGoal'),
-  goalWeight: $('#goalWeight'), goalBodyFat: $('#goalBodyFat'), goalWeekly: $('#goalWeekly'), goalDeadline: $('#goalDeadline'),
-  saveGoals: $('#saveGoals'), clearGoals: $('#clearGoals'), etaText: $('#etaText'),
-  waterGoal: $('#waterGoal'), waterCustom: $('#waterCustom'), addCustom: $('#addCustom'),
-  waterRing: $('#waterRing'), waterPct: $('#waterPct'), waterReset: $('#waterReset'), waterNotify: $('#waterNotify'), icsBtn: $('#icsBtn'),
-  searchNotes: $('#searchNotes'), tableBody: $('#table tbody'),
-  exportBtn: $('#exportBtn'), importBtn: $('#importBtn'), importFile: $('#importFile'),
-  height: $('#height'), pin: $('#pin'), saveSettings: $('#saveSettings'), clearAll: $('#clearAll'),
-};
-
-// ===== Height + BMI
-function updateBMI(){
-  const w = parseF(el.weight.value);
-  const h = parseF(el.height.value)/100;
-  el.bmi.value = (w && h) ? (w/(h*h)).toFixed(1) : '';
-}
-['weight','height'].forEach(id => document.addEventListener('input', (ev) => { if (ev.target.id === id) updateBMI() }));
-
-// ===== Entries
-function getEntries(){ return (load(LS.ENTRIES, [])).sort((a,b)=>a.date.localeCompare(b.date)) }
-function saveEntries(list){ save(LS.ENTRIES, list) }
-function resetForm(){ window.editingId = null; el.date.value = todayISO(); ['weight','bodyFat','muscle','water','visceral','bmr','notes'].forEach(id => el[id].value = ''); updateBMI(); }
-function fillForm(e){ el.date.value = e.date; el.weight.value = e.weightKg ?? ''; el.bodyFat.value = e.bodyFatPct ?? ''; el.muscle.value = e.muscleKg ?? ''; el.water.value = e.waterPct ?? ''; el.visceral.value = e.visceralFat ?? ''; el.bmr.value = e.bmr ?? ''; el.notes.value = e.notes ?? ''; updateBMI(); show('add'); window.scrollTo({top:0,behavior:'smooth'}); }
-el.saveBtn.onclick = () => {
-  const list = getEntries();
-  const obj = { id: (window.editingId || uid()), date: el.date.value, weightKg: parseF(el.weight.value), bodyFatPct: parseF(el.bodyFat.value), muscleKg: parseF(el.muscle.value), waterPct: parseF(el.water.value), visceralFat: parseF(el.visceral.value), bmr: el.bmr.value? parseInt(el.bmr.value): null, bmi: el.bmi.value? parseFloat(el.bmi.value): null, notes: el.notes.value?.trim() || '' };
-  if (!obj.date) return alert('اختر تاريخًا'); if (obj.weightKg == null) return alert('الوزن مطلوب');
-  const others = list.filter(x=>x.id!==obj.id); others.push(obj); others.sort((a,b)=>a.date.localeCompare(b.date));
-  saveEntries(others); window.editingId = null; resetForm(); renderAll(); show('history');
-};
-el.cancelBtn.onclick = () => { window.editingId = null; resetForm() };
-$$('.chip[data-preset]').forEach(c => c.onclick = () => { const p = c.dataset.preset; const dt = new Date(); if(p==='today'){} else { dt.setDate(dt.getDate()+Number(p)); } el.date.value = dt.toISOString().slice(0,10); });
-
-// ===== KPIs + Chart
-let chart, showAvg=false, range='all';
-function computeMovingAvg(arr, n=7){
-  const out = []; for(let i=0;i<arr.length;i++){ const w = arr.slice(Math.max(0,i-n+1), i+1).filter(x=>x!=null); if(!w.length){ out.push(null); } else { out.push(w.reduce((a,b)=>a+b,0)/w.length); } } return out;
-}
-function filterByRange(entries, days){
-  if(days==='all') return entries;
-  const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-Number(days));
-  return entries.filter(e => new Date(e.date) >= cutoff);
-}
-function renderChart(){
-  const all = getEntries();
-  const entries = filterByRange(all, range);
-  const labels = entries.map(e=>e.date);
-  const weight = entries.map(e=>e.weightKg ?? null);
-  const bodyFat = entries.map(e=>e.bodyFatPct ?? null);
-  const weightAvg = showAvg ? computeMovingAvg(weight,7) : null;
-  const ctx = document.getElementById('chart');
-  if (!chart){
-    chart = new Chart(ctx, { type:'line', data:{ labels, datasets:[
-      { label:'الوزن (كجم)', data: weight, tension:.35, yAxisID:'y' },
-      { label:'دهون %', data: bodyFat, tension:.35, yAxisID:'y1' },
-      { label:'متوسط 7 أيام', data: weightAvg||[], tension:.35, yAxisID:'y', borderDash:[6,4], hidden: !showAvg }
-    ]}, options:{ responsive:true, scales:{ y:{ position:'right' }, y1:{ position:'left', grid:{ drawOnChartArea:false } } } });
-  } else {
-    chart.data.labels = labels;
-    chart.data.datasets[0].data = weight;
-    chart.data.datasets[1].data = bodyFat;
-    chart.data.datasets[2].data = weightAvg||[];
-    chart.data.datasets[2].hidden = !showAvg;
-    chart.update();
-  }
-}
-$$('#view-dashboard .chip[data-range]').forEach(c => c.onclick = () => { $$('#view-dashboard .chip[data-range]').forEach(x=>x.classList.remove('active')); c.classList.add('active'); range = c.dataset.range; renderChart(); });
-$('#toggleAvg').onclick = (e)=>{ showAvg=!showAvg; e.target.classList.toggle('active', showAvg); renderChart(); };
-
-function renderKPIs(){
-  const entries = getEntries(); const h = parseF(el.height.value)/100;
-  const latest = entries[entries.length-1], prev = entries[entries.length-2];
-  if (latest){
-    el.kpiWeight.textContent = nf(latest.weightKg);
-    el.kpiBodyFat.textContent = nf(latest.bodyFatPct);
-    el.kpiBMI.textContent = (h && latest.weightKg)? (latest.weightKg/(h*h)).toFixed(1) : '—';
-    if (prev && prev.weightKg!=null){ const d=latest.weightKg-prev.weightKg; el.deltaWeight.textContent=`${d>0?'+':''}${d.toFixed(1)} كجم من آخر قراءة`; el.deltaWeight.className='delta '+(d>0?'up':d<0?'down':'') } else { el.deltaWeight.textContent='' }
-    if (prev && prev.bodyFatPct!=null){ const d=latest.bodyFatPct-prev.bodyFatPct; el.deltaBodyFat.textContent=`${d>0?'+':''}${(d).toFixed(1)}٪`; el.deltaBodyFat.className='delta '+(d>0?'up':d<0?'down':'') } else { el.deltaBodyFat.textContent='' }
-  } else { el.kpiWeight.textContent='—'; el.kpiBodyFat.textContent='—'; el.kpiBMI.textContent='—'; el.deltaWeight.textContent=''; el.deltaBodyFat.textContent='' }
-  const g = loadGoals();
-  if (g.weight && latest?.weightKg){ const diff = g.weight - latest.weightKg; el.kpiGoal.textContent = `${diff>0?'-':''}${Math.abs(diff).toFixed(1)} كجم`; el.deltaGoal.textContent = 'المتبقي للوصول للوزن المستهدف'; }
-  else if (g.bodyFat && latest?.bodyFatPct){ const diff = g.bodyFat - latest.bodyFatPct; el.kpiGoal.textContent = `${diff>0?'-':''}${Math.abs(diff).toFixed(1)}٪`; el.deltaGoal.textContent = 'المتبقي لنسبة الدهون المستهدفة'; }
-  else { el.kpiGoal.textContent = '—'; el.deltaGoal.textContent='' }
-}
-
-// ===== Goals
-function loadGoals(){ return load(LS.GOALS, { weight: null, bodyFat: null, weekly: null, deadline: null }) }
-function saveGoals(g){ save(LS.GOALS, g); renderGoals(g); renderKPIs() }
-function renderGoals(g){
-  el.goalWeight.value = g.weight ?? ''; el.goalBodyFat.value = g.bodyFat ?? ''; el.goalWeekly.value = g.weekly ?? ''; el.goalDeadline.value = g.deadline ?? '';
-  const entries = getEntries(); const latest = entries[entries.length-1]; let txt='';
-  if (latest && g.weight && g.weekly){ const weeks = Math.abs((latest.weightKg - g.weight) / g.weekly); txt = `تقدير: ${weeks.toFixed(1)} أسبوع للوصول للوزن المستهدف.` }
-  el.etaText.textContent = txt;
-}
-el.saveGoals.onclick = () => { const g = loadGoals(); g.weight=parseF(el.goalWeight.value); g.bodyFat=parseF(el.goalBodyFat.value); g.weekly=parseF(el.goalWeekly.value); g.deadline=el.goalDeadline.value||null; saveGoals(g); };
-el.clearGoals.onclick = () => { saveGoals({ weight:null, bodyFat:null, weekly:null, deadline:null }) };
-
-// ===== Water
-function waterState(){ const d = load(LS.WATER, null); const today = todayISO(); if (!d || d.date !== today){ return { date: today, intake: 0, goal: 3000 } } return d; }
-function saveWater(s){ save(LS.WATER, s); renderWater(s) }
-function renderWater(s){
-  el.waterGoal.value = s.goal;
-  const pct = Math.max(0, Math.min(100, Math.round((s.intake / Math.max(s.goal,1))*100)));
-  el.waterPct.textContent = pct + '%';
-  const deg = pct/100 * 360;
-  el.waterRing.style.transform = `rotate(${deg-90}deg)`;
-}
-function addWater(ml){ const s = waterState(); s.intake = Math.max(0, s.intake + ml); saveWater(s); if ('Notification' in window && Notification.permission === 'granted'){ new Notification('تم تسجيل الماء', { body: `أضفت ${ml} مل. الإجمالي: ${s.intake} / ${s.goal} مل` }) } }
-$$('.chip[data-add]').forEach(b => b.onclick = () => { const ml = parseInt(b.dataset.add); if (ml>0) addWater(ml) });
-el.addCustom.onclick = () => { const v = parseInt(el.waterCustom.value||'0'); if (v>0) addWater(v) };
-el.waterGoal.addEventListener('input', () => { const s = waterState(); s.goal = parseInt(el.waterGoal.value||'0')||3000; saveWater(s) });
-el.waterReset.onclick = () => { const s = waterState(); s.intake = 0; saveWater(s) };
-let waterInterval = null;
-el.waterNotify.onclick = async () => {
-  if (!('Notification' in window)) return alert('المتصفح لا يدعم الإشعارات');
-  let perm = Notification.permission; if (perm !== 'granted'){ perm = await Notification.requestPermission() } if (perm !== 'granted'){ return alert('لم يتم السماح بالإشعارات') }
-  if (waterInterval){ clearInterval(waterInterval); waterInterval = null; el.waterNotify.textContent = 'تفعيل تذكير الماء'; return }
-  el.waterNotify.textContent = 'إيقاف تذكير الماء';
-  waterInterval = setInterval(() => { const s = waterState(); new Notification('اشرب ماء 💧', { body: `تقدّمك اليوم: ${s.intake}/${s.goal} مل` }); }, 90*60*1000);
-};
-el.icsBtn.onclick = () => {
-  const ics = `BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//InBody Ultra//Water Reminder//AR
-BEGIN:VEVENT
-UID:${uid()}@inbody-ultra
-DTSTAMP:${new Date().toISOString().replace(/[-:]/g,'').split('.')[0]}Z
-SUMMARY:اشرب ماء 💧
-DESCRIPTION:تذكير دوري بشرب الماء.
-RRULE:FREQ=DAILY;INTERVAL=1
-DTSTART:${new Date().toISOString().replace(/[-:]/g,'').split('.')[0]}Z
-DURATION:PT0M
-BEGIN:VALARM
-TRIGGER:-PT0M
-REPEAT:1
-DURATION:PT120M
-ACTION:DISPLAY
-DESCRIPTION:اشرب ماء
-END:VALARM
-END:VEVENT
-END:VCALENDAR`.replace(/\n/g,'\r\n');
-  const blob = new Blob([ics], {type:'text/calendar'});
-  const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'water-reminder.ics'; a.click(); URL.revokeObjectURL(url);
-};
-
-// ===== History (filter + search)
-let historyRange = 'all';
-function renderTable(){
-  const q = el.searchNotes.value.trim().toLowerCase();
-  let entries = getEntries();
-  if (historyRange !== 'all'){ const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-Number(historyRange)); entries = entries.filter(e => new Date(e.date) >= cutoff); }
-  if (q) entries = entries.filter(e => (e.notes||'').toLowerCase().includes(q));
-  el.tableBody.innerHTML = '';
-  for (const e of entries){
-    const tr = document.createElement('tr'); function td(v){ const x=document.createElement('td'); x.textContent=v; return x }
-    tr.appendChild(td(e.date)); tr.appendChild(td(nf(e.weightKg))); tr.appendChild(td(nf(e.bodyFatPct))); tr.appendChild(td(nf(e.muscleKg))); tr.appendChild(td(nf(e.waterPct))); tr.appendChild(td(nf(e.visceralFat))); tr.appendChild(td(e.bmr ?? '—')); tr.appendChild(td(e.bmi ?? '—')); tr.appendChild(td(e.notes || '—'));
-    const actions = document.createElement('td'); actions.style.display='flex'; actions.style.gap='6px';
-    const b1=document.createElement('button'); b1.textContent='تعديل'; b1.className='ghost'; b1.onclick=()=>{ window.editingId=e.id; fillForm(e) };
-    const b2=document.createElement('button'); b2.textContent='حذف'; b2.className='ghost'; b2.onclick=()=>{ if (confirm('حذف هذه القراءة؟')){ const out = getEntries().filter(x=>x.id!==e.id); saveEntries(out); renderAll() } };
-    actions.appendChild(b1); actions.appendChild(b2); tr.appendChild(actions); el.tableBody.appendChild(tr);
-  }
-}
-$('#searchNotes').addEventListener('input', renderTable);
-$$('#view-history .chip[data-range]').forEach(c => c.onclick = () => { $$('#view-history .chip[data-range]').forEach(x=>x.classList.remove('active')); c.classList.add('active'); historyRange = c.dataset.range; renderTable(); });
-
-// ===== Export / Import
-el.exportBtn.onclick = () => {
-  const data = JSON.stringify({ heightCm: parseF(el.height.value)||null, goals: loadGoals(), water: load(LS.WATER, null), entries: getEntries() }, null, 2);
-  const blob = new Blob([data], {type:'application/json'}); const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = `inbody-ultra-${todayISO()}.json`; a.click(); URL.revokeObjectURL(url);
-};
-el.importBtn.onclick = () => el.importFile.click();
-el.importFile.onchange = (ev) => {
-  const f = ev.target.files?.[0]; if(!f) return; const reader = new FileReader();
-  reader.onload = () => { try{ const pkg = JSON.parse(reader.result); if (pkg.heightCm!=null) { el.height.value = pkg.heightCm; save(LS.HEIGHT, pkg.heightCm) } if (pkg.goals) { save(LS.GOALS, pkg.goals) } if (pkg.water) { save(LS.WATER, pkg.water) } if (Array.isArray(pkg.entries)) { save(LS.ENTRIES, pkg.entries) } renderAll(); }catch(e){ alert('ملف JSON غير صالح') } };
-  reader.readAsText(f);
-};
-
-// ===== Settings
-function loadSettings(){ const h = load(LS.HEIGHT, null); if (h!=null) el.height.value = h; const p = load(LS.PIN, null); if (p) el.pin.value = p; }
-el.saveSettings.onclick = () => { if (el.height.value) save(LS.HEIGHT, parseF(el.height.value)); if (el.pin.value && (el.pin.value.length<4 || el.pin.value.length>6)) return alert('PIN بين 4 و6 أرقام'); if (el.pin.value) save(LS.PIN, el.pin.value); alert('تم الحفظ'); };
-el.clearAll.onclick = () => { if (confirm('هل أنت متأكد؟ سيُمسح كل شيء.')){ Object.values(LS).forEach(k => localStorage.removeItem(k)); location.reload(); } };
-
-// ===== Init
-function renderAll(){ renderKPIs(); renderChart(); renderTable(); renderGoals(loadGoals()); renderWater(waterState()); }
-(function(){
-  // PIN Gate (if set)
-  const pin = load(LS.PIN, null);
-  if (pin){
-    const entered = prompt('أدخل PIN لفتح التطبيق'); if (entered !== pin){ alert('PIN غير صحيح'); location.reload(); return; }
-  }
-  // set default date
-  el.date.value = todayISO();
-  loadSettings();
-  show(location.hash.replace('#','') || 'dashboard');
-  renderAll();
-  if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js') }
-})();
-</script>
 </body>
 </html>
