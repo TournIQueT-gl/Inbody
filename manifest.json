@@ -1,10 +1,12 @@
 {
-  "name": "InBody Tracker",
-  "short_name": "InBody",
+  "name": "متابعة إنبودي برو",
+  "short_name": "إنبودي برو",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#111111",
-  "theme_color": "#111111",
+  "background_color": "#0b0e14",
+  "theme_color": "#0b0e14",
+  "dir": "rtl",
+  "lang": "ar",
   "icons": [
     {
       "src": "icon-192.png",

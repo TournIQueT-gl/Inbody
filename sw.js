@@ -1,4 +1,4 @@
-const CACHE = 'inbody-cache-v1';
+const CACHE = 'inbody-ar-pro-cache-v1';
 const ASSETS = [
   './',
   './index.html',
