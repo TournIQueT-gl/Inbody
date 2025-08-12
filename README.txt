@@ -1,0 +1,1 @@
+InBody Ultra AR v3 - Professional PWA for tracking InBody data. Arabic version.
