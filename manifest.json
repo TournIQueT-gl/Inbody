@@ -1,1 +1,22 @@
-{"name": "InBody Ultra AR v3", "short_name": "InBody Ultra", "start_url": ".", "display": "standalone", "background_color": "#ffffff", "theme_color": "#ffffff", "icons": [{"src": "icon-192.png", "sizes": "192x192", "type": "image/png"}, {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"}]}
+{
+  "name": "متابعة إنبودي Ultra",
+  "short_name": "InBody Ultra",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0b0e14",
+  "theme_color": "#0b0e14",
+  "dir": "rtl",
+  "lang": "ar",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
