@@ -1,7 +1,7 @@
 {
   "name": "متابعة إنبودي Ultra",
   "short_name": "InBody Ultra",
-  "start_url": "./?v=53",
+  "start_url": "./?v=56",
   "display": "standalone",
   "background_color": "#0b0e14",
   "theme_color": "#0b0e14",
@@ -11,12 +11,20 @@
     {
       "src": "icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-1024.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }

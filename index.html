@@ -10,12 +10,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=53">
+  <!-- iOS splash (subset common) -->
+  <link rel="apple-touch-startup-image" href="splash/splash-1170x2532.png" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+  <link rel="apple-touch-startup-image" href="splash/splash-1284x2778.png" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+  <link rel="stylesheet" href="styles.css?v=56">
   <script>
-    // Lazy-load charts & plugins
-    async function ensureCharts(){ if(window.Chart) return; await new Promise(r=>{ const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/chart.js'; s.onload=r; document.head.appendChild(s) }); await new Promise(r=>{ const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.umd.min.js'; s.onload=r; document.head.appendChild(s) }); }
-    async function ensurePDF(){ if(window.jspdf) return; await new Promise(r=>{ const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'; s.onload=r; document.head.appendChild(s) }); }
-    if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js?v=53').then(reg=>{ reg.addEventListener('updatefound', ()=>{ const sw=reg.installing; sw.addEventListener('statechange', ()=>{ if(sw.state==='installed' && navigator.serviceWorker.controller){ window.postMessage({type:'SW_UPDATED'}, '*') } }) }) }) }
+    async function ensureCharts(){ if(window.Chart) return; await new Promise(r=>{ const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/chart.js'; s.onload=r; document.head.appendChild(s) }); await new Promise(r=>{ const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.umd.min.js'; s.onload=r; document.head.appendChild(s) }) }
+    if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js?v=56').then(reg=>{ reg.addEventListener('updatefound', ()=>{ const sw=reg.installing; sw.addEventListener('statechange', ()=>{ if(sw.state==='installed' && navigator.serviceWorker.controller) window.postMessage({type:'SW_UPDATED'}, '*') }) }) }) }
   </script>
 </head>
 <body>
@@ -26,7 +27,6 @@
       <div class="tag">PWA — يعمل دون إنترنت بعد أول مرة</div>
     </div>
     <div style="display:flex;gap:8px">
-      <button id="btnLang" class="ghost">EN</button>
       <button id="btnInstall" class="ghost">تثبيت كتطبيق</button>
       <button id="btnTheme" class="ghost">وضع: <span id="themeName">—</span></button>
     </div>
@@ -48,9 +48,11 @@
     <div class="card" style="margin-top:12px">
       <div class="title">إضافة سريعة</div>
       <div class="quick">
+        <button id="minusW" class="ghost">-0.2</button>
         <input id="qaWeight" type="number" inputmode="decimal" step="0.1" placeholder="وزن اليوم (كجم)">
-        <input id="qaBodyFat" type="number" inputmode="decimal" step="0.1" placeholder="دهون % (اختياري)">
-        <button id="qaSave">حفظ فوري</button>
+        <button id="plusW" class="ghost">+0.2</button>
+        <input id="qaBodyFat" type="number" inputmode="decimal" step="0.1" placeholder="دهون %">
+        <button id="qaSave">حفظ</button>
       </div>
       <div class="chips" style="margin-top:8px">
         <button class="chip" data-qa-add="250">+250 مل ماء</button>
@@ -69,19 +71,41 @@
         <button class="chip" data-range="7">7</button>
         <button class="chip" id="toggleAvg">متوسط 7 أيام</button>
         <button class="chip" id="resetZoom">إعادة ضبط التكبير</button>
+        <button class="chip" id="toggleW">إخفاء الوزن</button>
+        <button class="chip" id="toggleBF">إخفاء الدهون%</button>
       </div>
-      <canvas id="chart" height="260" aria-label="Chart"></canvas>
-      <p class="tag">Zoom/Pan متاح — استخدم قرصة أو عجلة.</p>
+      <div id="chartSkel" class="skel h180"></div>
+      <canvas id="chart" height="260" aria-label="Chart" style="display:none"></canvas>
+      <p class="tag">Goal line + Annotations • Zoom/Pan متاح.</p>
     </div>
 
     <div class="card" style="margin-top:12px">
-      <div class="title">مؤشرات ذكية</div>
-      <div class="badges" id="insightsBadges"></div>
+      <div class="title">ملخص شهري</div>
+      <div id="monthly" class="ins-cards"></div>
     </div>
   </section>
 
-  <!-- Add / Goals / Water / History from previous versions are present via JS build -->
+  <!-- Planner / Goals -->
+  <section class="view" id="view-goals">
+    <div class="card">
+      <div class="title">أهداف وخطة أسبوع</div>
+      <div class="grid">
+        <div><label>هدف الوزن (كجم)</label><input id="goalWeight" type="number" step="0.1"/></div>
+        <div><label>معدل أسبوعي (كجم/أسبوع)</label><input id="goalWeekly" type="number" step="0.1" placeholder="-0.5"/></div>
+        <div><label>موعد مستهدف</label><input id="goalDeadline" type="date"/></div>
+        <div><label>محاكاة المعدل</label><input id="simWeekly" type="range" min="-1.5" max="1.5" step="0.1" value="-0.5"></div>
+      </div>
+      <p class="tag">ETA حسب المحاكاة: <span id="simETA">—</span></p>
+      <div class="title">خطة الأسبوع</div>
+      <div class="chips" id="planner"></div>
+      <div class="search" style="margin-top:8px">
+        <button id="saveGoals">حفظ</button>
+        <button class="ghost" id="clearGoals">مسح</button>
+      </div>
+    </div>
+  </section>
 
+  <!-- Add -->
   <section class="view" id="view-add"><div class="card"><div class="title">إضافة / تعديل قراءة</div>
     <div class="grid">
       <div><label>التاريخ</label><input id="date" type="date"/></div>
@@ -107,23 +131,7 @@
     <div class="tag" id="autoCalcs">—</div>
   </div></section>
 
-  <section class="view" id="view-goals">
-    <div class="card">
-      <div class="title">أهداف اللياقة</div>
-      <div class="grid">
-        <div><label>هدف الوزن (كجم)</label><input id="goalWeight" type="number" step="0.1"/></div>
-        <div><label>هدف الدهون %</label><input id="goalBodyFat" type="number" step="0.1"/></div>
-        <div><label>معدل التغيير الأسبوعي</label><input id="goalWeekly" type="number" step="0.1" placeholder="-0.5"/></div>
-        <div><label>موعد مستهدف</label><input id="goalDeadline" type="date"/></div>
-      </div>
-      <div class="search" style="margin-top:8px">
-        <button id="saveGoals">حفظ الأهداف</button>
-        <button class="ghost" id="clearGoals">مسح</button>
-      </div>
-      <p class="tag" id="etaText"></p>
-    </div>
-  </section>
-
+  <!-- Water -->
   <section class="view" id="view-water">
     <div class="card">
       <div class="title">ماء اليوم</div>
@@ -139,27 +147,24 @@
         <button class="chip" id="addCustom">+ إضافة</button>
       </div>
       <div class="card" style="margin-top:12px">
-        <div class="title">Hydration Coach</div>
-        <div class="search"><button id="btnSuggestWater" class="ghost">اقترح هدف حسب وزني</button><span id="coachMsg" class="tag"></span></div>
-      </div>
-      <div class="card" style="margin-top:12px">
-        <div class="title">إعدادات التذكير</div>
+        <div class="title">ICS متقدم</div>
         <div class="grid">
-          <div><label>فاصل التذكير</label><select id="waterInterval"><option value="60">60</option><option value="90" selected>90</option><option value="120">120</option></select></div>
-          <div><label>ساعات الصمت (من)</label><input id="quietStart" type="time" value="22:00"></div>
-          <div><label>ساعات الصمت (إلى)</label><input id="quietEnd" type="time" value="08:00"></div>
+          <div><label>من ساعة</label><input id="icsFrom" type="time" value="09:00"></div>
+          <div><label>إلى ساعة</label><input id="icsTo" type="time" value="21:00"></div>
+          <div><label>كل (دقيقة)</label><input id="icsEvery" type="number" value="90"></div>
+        </div>
+        <div class="search" style="margin-top:6px">
+          <button id="icsAdvBtn" class="ghost">توليد ملف ICS ذكي</button>
         </div>
       </div>
       <div class="search" style="margin-top:8px">
         <button id="waterReset" class="ghost" style="flex:1">إعادة ضبط اليوم</button>
         <button id="waterNotify" style="flex:1">تفعيل تذكير الماء</button>
       </div>
-      <div class="search" style="margin-top:6px">
-        <button id="icsBtn" class="ghost" style="flex:1">تذكير تقويم كل ساعتين (ICS)</button>
-      </div>
     </div>
   </section>
 
+  <!-- History (virtualized) -->
   <section class="view" id="view-history">
     <div class="card">
       <div class="title">القراءات</div>
@@ -173,14 +178,12 @@
           <button class="chip" data-range="7">7</button>
         </div>
       </div>
-      <div style="overflow-x:auto">
-        <table id="table" aria-label="سجل القراءات">
-          <thead><tr>
-            <th>التاريخ</th><th>الوزن</th><th>دهون %</th><th>عضلات</th><th>ماء %</th><th>حشوية</th><th>BMR</th><th>BMI</th><th>ملاحظات</th><th>إجراءات</th>
-          </tr></thead>
-          <tbody></tbody>
-        </table>
+
+      <div class="row header">
+        <div>التاريخ</div><div>وزن</div><div>دهون%</div><div>عضلات</div><div>ماء%</div><div>حشوية</div><div>BMR</div><div>BMI</div><div>ملاحظات</div><div>إجراءات</div>
       </div>
+      <div id="vtable" class="vtable" aria-label="سجل القراءات"></div>
+
       <div class="search" style="margin-top:8px;gap:12px">
         <button class="ghost" id="exportBtn">تصدير JSON</button>
         <button class="ghost" id="exportCSVBtn">تصدير CSV</button>
@@ -193,12 +196,12 @@
           <option value="miscale">Mi Scale CSV</option>
         </select>
         <button class="ghost" id="importCSVBtn">استيراد CSV</button>
-        <button id="snapshotBtn">Snapshot HTML</button>
+        <button id="snapshotBtn">Snapshot HTML v2</button>
       </div>
-      <p class="tag" id="pagingInfo"></p>
     </div>
   </section>
 
+  <!-- Settings -->
   <section class="view" id="view-settings">
     <div class="card">
       <div class="title">الإعدادات</div>
@@ -224,7 +227,7 @@
       <div class="title">Diagnostics</div>
       <div class="kv">
         <div>UA</div><div id="ua"></div>
-        <div>localStorage</div><div id="lsOK"></div>
+        <div>Storage</div><div id="lsOK"></div>
         <div>Notifications</div><div id="notif"></div>
         <div>SW</div><div id="sw"></div>
       </div>
@@ -241,6 +244,9 @@
   <button class="tab" data-view="settings" role="tab">إعدادات</button>
 </nav>
 
-<script src="app.js?v=53"></script>
+<div id="toast" class="toast"></div>
+
+<script src="app.js?v=56"></script>
+<script src="worker.js?v=56" type="text/worker-placeholder"></script>
 </body>
 </html>

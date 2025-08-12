@@ -12,7 +12,7 @@
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;font-family:system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,'Noto Kufi Arabic',sans-serif;background:var(--bg);color:var(--text)}
-.wrap{max-width:980px;margin:0 auto;padding:16px;padding-bottom:110px}
+.wrap{max-width:1000px;margin:0 auto;padding:16px;padding-bottom:120px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow)}
 .title{font-weight:800;font-size:20px;margin:6px 0 12px}
 label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
@@ -46,12 +46,23 @@ th{color:var(--muted);text-align:right}
 .chip.active{background:var(--accent);color:#fff;border-color:transparent}
 .search{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .update-banner{background:#ffd64d;color:#1a1a1a;padding:10px;border-radius:10px;margin:0 0 8px}
+
+/* Skeletons */
+.skel{background:linear-gradient(90deg, rgba(255,255,255,.06), rgba(255,255,255,.12), rgba(255,255,255,.06)); background-size:200% 100%; animation:sh 1.2s infinite; border-radius:12px}
+@keyframes sh{0%{background-position:0%}100%{background-position:200%}}
+.skel.h180{height:180px}
+
+/* Toast */
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(70px + env(safe-area-inset-bottom));background:#111;padding:10px 14px;border-radius:999px;color:#fff;display:none;z-index:50;border:1px solid #333}
+
 /* Quick Add */
-.quick{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-@media (max-width:700px){ .quick{grid-template-columns:1fr 1fr 1fr} }
+.quick{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+@media (max-width:700px){ .quick{grid-template-columns:repeat(5,1fr)} }
+
+/* Virtualized table */
+.vtable{height:420px;overflow:auto;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.vspacer{height:0}
+.row{display:grid;grid-template-columns:120px 90px 90px 90px 90px 90px 70px 60px 1fr 120px;gap:8px;padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px;align-items:center}
+.row.header{position:sticky;top:0;background:var(--card);z-index:1;font-weight:700}
 .badges{display:flex;gap:8px;flex-wrap:wrap}
 .badge{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:6px 10px;font-size:12px}
-/* Insights */
-.ins-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-@media (max-width:700px){ .ins-cards{grid-template-columns:1fr} }
-.kv{display:grid;grid-template-columns:180px 1fr;gap:8px}

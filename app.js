@@ -1,270 +1,406 @@
 
-// InBody Ultra AR v5.3 Ultra+ (No-Sec Pack)
+// InBody Ultra AR v5.6 — All-In (no security pack)
 (function(){
-const APP_VERSION='5.3';
+const APP_VERSION='5.6';
 const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
 function todayISO(){ return new Date().toISOString().slice(0,10) }
 function parseF(v){ const x=parseFloat(v); return Number.isFinite(x)? x : null }
 function uid(){ return Math.random().toString(36).slice(2) }
 function nf(x){ return x==null? '—' : Number(x).toFixed(1) }
-function save(k,v){ localStorage.setItem(k, JSON.stringify(v)) }
-function load(k,f=null){ try{ const v=localStorage.getItem(k); return v? JSON.parse(v) : f }catch{return f} }
-function vibrate(ms=10){ try{ navigator.vibrate && navigator.vibrate(ms) }catch(_){} }
-const LS={ENTRIES:'inbody.entries.v53',HEIGHT:'inbody.height.v53',GOALS:'inbody.goals.v53',WATER:'inbody.water.v53',THEME:'inbody.theme.v53',CFG:'inbody.cfg.v53',APPVER:'inbody.appver',THEMECFG:'inbody.themecfg.v53',BACKUP:'inbody.tmp.backup.v53'};
+function vibrate(ms=12){ try{ navigator.vibrate && navigator.vibrate(ms) }catch(_){} }
 
-// Update banner
-window.addEventListener('message', (e)=>{ if(e.data && e.data.type==='SW_UPDATED'){ const b=$('#updateBanner'); if(b) b.style.display='block' } });
-(function(){ const prev=load(LS.APPVER,null); if(prev && prev!==APP_VERSION){ const b=$('#updateBanner'); if(b) b.style.display='block' } save(LS.APPVER, APP_VERSION) })();
+const LS={THEME:'inbody.theme.v56', THEMECFG:'inbody.themecfg.v56', GOALS:'inbody.goals.v56', WATER:'inbody.water.v56', CSVPROF:'inbody.csvprofiles.v56', APPVER:'inbody.appver'};
 
-// Theme + builder
-function applyThemeCfg(cfg){ document.documentElement.style.setProperty('--accent', cfg.accent||'#5b8cff'); document.documentElement.style.setProperty('--radius', (cfg.radius||18)+'px'); }
-function setTheme(name){ document.documentElement.setAttribute('data-theme', name); save(LS.THEME, name); const tn=$('#themeName'); if(tn) tn.textContent=(name==='light'?'فاتح':'غامق'); }
-applyThemeCfg(load(LS.THEMECFG,{accent:'#5b8cff',radius:18}));
-setTheme(load(LS.THEME,(matchMedia && matchMedia('(prefers-color-scheme: light)').matches?'light':'dark')));
+// Toast
+const toastEl = $('#toast');
+function toast(msg, t=2200){ toastEl.textContent=msg; toastEl.style.display='block'; setTimeout(()=> toastEl.style.display='none', t) }
+
+// Theme
+function applyThemeCfg(cfg){ document.documentElement.style.setProperty('--accent', cfg.accent||'#5b8cff'); document.documentElement.style.setProperty('--radius', (cfg.radius||18)+'px') }
+function setTheme(name){ document.documentElement.setAttribute('data-theme', name); localStorage.setItem(LS.THEME, name); $('#themeName').textContent=(name==='light'?'فاتح':'غامق') }
+
+applyThemeCfg(JSON.parse(localStorage.getItem(LS.THEMECFG)||'{"accent":"#5b8cff","radius":18}'));
+setTheme(localStorage.getItem(LS.THEME) || ((matchMedia && matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark'));
 $('#btnTheme').onclick=()=> setTheme(document.documentElement.getAttribute('data-theme')==='light'?'dark':'light');
 
+// SW update banner
+window.addEventListener('message', (e)=>{ if(e.data && e.data.type==='SW_UPDATED'){ $('#updateBanner').style.display='block' } });
+$('#reloadApp').onclick=()=> location.reload(true);
+
 // Install
-let deferredPrompt=null; window.addEventListener('beforeinstallprompt',(e)=>{e.preventDefault();deferredPrompt=e; $('#btnInstall').disabled=false}); $('#btnInstall').onclick=()=>{ if(deferredPrompt){ deferredPrompt.prompt(); deferredPrompt=null; } };
+let deferredPrompt=null; window.addEventListener('beforeinstallprompt',(e)=>{ e.preventDefault(); deferredPrompt=e; $('#btnInstall').disabled=false }); $('#btnInstall').onclick=()=>{ if(deferredPrompt){ deferredPrompt.prompt(); deferredPrompt=null; }};
 
-// Tabs
-const views=['dashboard','add','goals','water','history','settings']; function show(v){ views.forEach(id=>{ const el=document.getElementById('view-'+id); if(el) el.classList.toggle('active', id===v) }); $$('.tab').forEach(t=>t.classList.toggle('active', t.dataset.view===v)); location.hash=v; if(v==='dashboard'){ ensureCharts().then(()=>renderChart()) } }
-$$('.tab').forEach(t=> t.addEventListener('click', ()=> show(t.dataset.view))); window.addEventListener('hashchange', ()=> show(location.hash.replace('#','') || 'dashboard'));
+// ---------- IndexedDB (with LS migration) ----------
+let db; const DB_NAME='inbody-ultra', VERS=1;
+function idbOpen(){
+  return new Promise((res,rej)=>{
+    const rq=indexedDB.open(DB_NAME, VERS);
+    rq.onupgradeneeded=(ev)=>{
+      db=rq.result;
+      if(!db.objectStoreNames.contains('entries')) db.createObjectStore('entries', {keyPath:'id'});
+      if(!db.objectStoreNames.contains('meta')) db.createObjectStore('meta');
+    };
+    rq.onsuccess=()=>{ db=rq.result; // migrate
+      const migrated = localStorage.getItem('inbody.migrated.v56');
+      if(!migrated){
+        try{
+          const old = JSON.parse(localStorage.getItem('inbody.entries.v53')||'[]').concat(JSON.parse(localStorage.getItem('inbody.entries.v52')||'[]'));
+          if(old && old.length){
+            const tx=db.transaction(['entries'],'readwrite'); const st=tx.objectStore('entries');
+            old.forEach(e=> st.put(e));
+          }
+          const goals = JSON.parse(localStorage.getItem('inbody.goals.v53')||'null') || JSON.parse(localStorage.getItem('inbody.goals.v52')||'null');
+          if(goals){ const tx=db.transaction(['meta'],'readwrite'); tx.objectStore('meta').put(goals,'goals') }
+          const water = JSON.parse(localStorage.getItem('inbody.water.v53')||'null') || JSON.parse(localStorage.getItem('inbody.water.v52')||'null');
+          if(water){ const tx=db.transaction(['meta'],'readwrite'); tx.objectStore('meta').put(water,'water') }
+        }catch(_){}
+        localStorage.setItem('inbody.migrated.v56','1');
+      }
+      res();
+    };
+    rq.onerror=()=> rej(rq.error);
+  });
+}
+function idbAllEntries(){ return new Promise((res,rej)=>{ const tx=db.transaction(['entries'],'readonly'); const st=tx.objectStore('entries'); const rq=st.getAll(); rq.onsuccess=()=>{ res((rq.result||[]).sort((a,b)=> a.date.localeCompare(b.date))) }; rq.onerror=()=>rej(rq.error) }) }
+function idbPutEntry(e){ return new Promise((res,rej)=>{ const tx=db.transaction(['entries'],'readwrite'); const st=tx.objectStore('entries'); st.put(e).onsuccess=()=>res(); tx.onerror=()=>rej(tx.error) }) }
+function idbDelEntry(id){ return new Promise((res,rej)=>{ const tx=db.transaction(['entries'],'readwrite'); tx.objectStore('entries').delete(id).onsuccess=()=>res(); tx.onerror=()=>rej(tx.error) }) }
+function idbPutMeta(key,val){ return new Promise((res,rej)=>{ const tx=db.transaction(['meta'],'readwrite'); tx.objectStore('meta').put(val,key).onsuccess=()=>res(); tx.onerror=()=>rej(tx.error) }) }
+function idbGetMeta(key){ return new Promise((res,rej)=>{ const tx=db.transaction(['meta'],'readonly'); const rq=tx.objectStore('meta').get(key); rq.onsuccess=()=>res(rq.result||null); rq.onerror=()=>rej(rq.error) }) }
 
-// Elements
-const el={
-  // quick add
-  qaWeight:$('#qaWeight'), qaBodyFat:$('#qaBodyFat'), qaSave:$('#qaSave'),
-  // normal form
-  date:$('#date'), weight:$('#weight'), bodyFat:$('#bodyFat'), muscle:$('#muscle'),
-  water:$('#water'), visceral:$('#visceral'), bmr:$('#bmr'), bmi:$('#bmi'), notes:$('#notes'),
-  saveBtn:$('#saveBtn'), cancelBtn:$('#cancelBtn'), copyLast:$('#copyLast'),
-  // KPIs
-  kpiWeight:$('#kpiWeight'), kpiBodyFat:$('#kpiBodyFat'), kpiBMI:$('#kpiBMI'), kpiETA:$('#kpiETA'),
-  deltaWeight:$('#deltaWeight'), deltaBodyFat:$('#deltaBodyFat'),
-  // goals
-  goalWeight:$('#goalWeight'), goalBodyFat:$('#goalBodyFat'), goalWeekly:$('#goalWeekly'), goalDeadline:$('#goalDeadline'),
-  saveGoals:$('#saveGoals'), clearGoals:$('#clearGoals'), etaText:$('#etaText'),
-  // water
-  waterGoal:$('#waterGoal'), waterCustom:$('#waterCustom'), addCustom:$('#addCustom'),
-  waterRing:$('#waterRing'), waterPct:$('#waterPct'), waterReset:$('#waterReset'), waterNotify:$('#waterNotify'), icsBtn:$('#icsBtn'),
-  waterIntervalSel:$('#waterInterval'), quietStart:$('#quietStart'), quietEnd:$('#quietEnd'), btnSuggestWater:$('#btnSuggestWater'), coachMsg:$('#coachMsg'),
-  // history
-  searchNotes:$('#searchNotes'), tableBody:$('#table tbody'), exportBtn:$('#exportBtn'), importBtn:$('#importBtn'), importFile:$('#importFile'),
-  exportCSVBtn:$('#exportCSVBtn'), importCSVBtn:$('#importCSVBtn'), importCSVFile:$('#importCSVFile'), csvTemplate:$('#csvTemplate'), snapshotBtn:$('#snapshotBtn'), pagingInfo:$('#pagingInfo'),
-  // settings
-  height:$('#height'), accent:$('#accent'), radius:$('#radius'), saveSettings:$('#saveSettings'), clearAll:$('#clearAll'), btnDiagnostics:$('#btnDiagnostics'),
-  diagCard:$('#diagCard'), ua:$('#ua'), lsOK:$('#lsOK'), notif:$('#notif'), sw:$('#sw'),
-  // insights badges
-  insightsBadges:$('#insightsBadges'), badges:$('#badges'),
-  // chart controls
-  toggleAvg:$('#toggleAvg'), resetZoom:$('#resetZoom')
-};
-
-// Data helpers
-function getEntries(){ return (load(LS.ENTRIES,[])).sort((a,b)=>a.date.localeCompare(b.date)) }
-function saveEntries(list){ save(LS.ENTRIES, list) }
-function backupAll(){ const pack={ entries:getEntries(), goals:load(LS.GOALS,null), water:load(LS.WATER,null), height:load(LS.HEIGHT,null) }; save(LS.BACKUP, pack); setTimeout(()=> localStorage.removeItem(LS.BACKUP), 15000); return pack }
-function restoreBackup(){ const pack=load(LS.BACKUP,null); if(!pack) return; save(LS.ENTRIES, pack.entries||[]); save(LS.GOALS, pack.goals||null); save(LS.WATER, pack.water||null); if(pack.height!=null) save(LS.HEIGHT, pack.height); renderAll() }
-
-// BMI + auto calcs
-function updateBMI(){ const w=parseF(el.weight?.value), h=parseF(el.height?.value)/100; const bf=parseF(el.bodyFat?.value); if(el.bmi) el.bmi.value=(w&&h)?(w/(h*h)).toFixed(1):''; if(w!=null && bf!=null){ const fm=(w*bf/100).toFixed(1), lm=(w - w*bf/100).toFixed(1); el.autoCalcs.textContent=`كتلة دهنية: ${fm}كجم • كتلة صافية: ${lm}كجم` } else { el.autoCalcs.textContent='—' } }
-document.addEventListener('input', ev=>{ if(ev.target && ['weight','height','bodyFat'].includes(ev.target.id)) updateBMI() });
-
-// Quick Add
-$('#qaSave').onclick=()=>{
-  const w=parseF(el.qaWeight.value); const bf=parseF(el.qaBodyFat.value);
-  if(w==null) return alert('اكتب وزنًا'); const list=getEntries(); const today=todayISO();
-  // anomaly checks: future date/duplicate
-  if(list.some(e=>e.date===today)){ if(!confirm('فيه قراءة لنهاردة بالفعل — حفظ كبديل؟')) return; }
-  const last=list[list.length-1]; if(last && last.weightKg!=null){ const diff=Math.abs(w-last.weightKg); if(diff>5){ if(!confirm(`فرق كبير عن آخر وزن (${diff.toFixed(1)}كجم). متأكد؟`)) return } }
-  const obj={ id:uid(), date:today, weightKg:w, bodyFatPct:bf??null, muscleKg:null, waterPct:null, visceralFat:null, bmr:null, bmi:null, notes:'' };
-  const old=getEntries(); backupAll(); const others=old.filter(x=>x.date!==today); others.push(obj); others.sort((a,b)=>a.date.localeCompare(b.date)); saveEntries(others); show('dashboard'); el.qaWeight.value=''; el.qaBodyFat.value=''; vibrate(10); renderAll();
-};
-$$('.chip[data-qa-add]').forEach(b=> b.onclick=()=>{ const ml=parseInt(b.dataset.qaAdd); addWater(ml) });
-$('#qaInBody').onclick=()=>{ show('add'); ['bodyFat','muscle','water','visceral','bmr'].forEach(id=>{ const x=$('#'+id); x && x.focus() }) };
-
-// Form + validations
-function resetForm(){ window.editingId=null; if(el.date) el.date.value=todayISO(); ['weight','bodyFat','muscle','water','visceral','bmr','notes'].forEach(id=>{ if(el[id]) el[id].value='' }); updateBMI() }
-function fillForm(e){ if(!e) return; el.date.value=e.date; el.weight.value=e.weightKg??''; el.bodyFat.value=e.bodyFatPct??''; el.muscle.value=e.muscleKg??''; el.water.value=e.waterPct??''; el.visceral.value=e.visceralFat??''; el.bmr.value=e.bmr??''; el.notes.value=e.notes??''; updateBMI(); show('add'); scrollTo({top:0,behavior:'smooth'}) }
-$$('.chip[data-preset]').forEach(c=> c.onclick=()=>{ const p=c.dataset.preset; const dt=new Date(); if(p!=='today') dt.setDate(dt.getDate()+Number(p)); el.date.value=dt.toISOString().slice(0,10) });
-if(el.copyLast) el.copyLast.onclick=()=>{ const list=getEntries(); const last=list[list.length-1]; if(!last) return alert('لا توجد قراءة سابقة'); fillForm({...last, date: todayISO()}) };
-if(el.saveBtn) el.saveBtn.onclick=()=>{
-  const d=el.date.value; if(!d) return alert('اختر تاريخًا'); if(new Date(d)>new Date()) return alert('التاريخ في المستقبل!');
-  const list=getEntries(); const last=list[list.length-1];
-  const obj={ id:(window.editingId||uid()), date:d, weightKg:parseF(el.weight?.value), bodyFatPct:parseF(el.bodyFat?.value), muscleKg:parseF(el.muscle?.value), waterPct:parseF(el.water?.value), visceralFat:parseF(el.visceral?.value), bmr:el.bmr?.value?parseInt(el.bmr.value):null, bmi:el.bmi?.value?parseFloat(el.bmi.value):null, notes:el.notes?.value?.trim()||'' };
-  if(obj.weightKg==null) return alert('الوزن مطلوب');
-  if(last && last.weightKg!=null){ const diff=Math.abs(obj.weightKg-last.weightKg); if(diff>5){ if(!confirm(`فرق الوزن كبير (${diff.toFixed(1)} كجم). متأكد؟`)) return } }
-  const oldList=getEntries(); backupAll(); const others=oldList.filter(x=>x.id!==obj.id && x.date!==obj.date); others.push(obj); others.sort((a,b)=>a.date.localeCompare(b.date)); saveEntries(others); window.editingId=null; resetForm(); renderAll(); show('history'); snack('تم الحفظ', ()=>{ saveEntries(oldList); renderAll() }); vibrate(10);
-};
-if(el.cancelBtn) el.cancelBtn.onclick=()=>{ window.editingId=null; resetForm() };
-
-// Snackbar
-function snack(msg, undo){ const s=document.createElement('div'); s.className='snackbar'; s.style.display='flex'; s.innerHTML=`<span>${msg}</span>${undo?'<button id="snkUndo">تراجع</button>':''}`; document.body.appendChild(s); const t=setTimeout(()=>{ s.remove() }, 5000); if(undo){ s.querySelector('#snkUndo').onclick=()=>{ undo(); clearTimeout(t); s.remove() } }
-
-// }  (we will close later)
+// ---------- Web Worker (analytics) ----------
+let workerBlobUrl=null, worker=null;
+function ensureWorker(){
+  if(worker) return worker;
+  const js = document.querySelector('script[src*="app.js"]').src.replace('app.js','worker.js');
+  // fetch worker script text and create blob
+  return fetch(js).then(r=>r.text()).then(code=>{
+    const blob=new Blob([code],{type:'application/javascript'});
+    workerBlobUrl=URL.createObjectURL(blob);
+    worker = new Worker(workerBlobUrl);
+    return worker;
+  });
 }
 
-// KPIs + Chart (with zoom)
+// ---------- State + helpers ----------
+const state={ entries:[], goals:{weight:null,weekly:null,deadline:null}, water:{date:todayISO(),intake:0,goal:3000}, toggles:{w:true,bf:true}, analysis:null, streak:{count:0,freeze:0} };
+
+async function refreshState(){
+  state.entries = await idbAllEntries();
+  state.goals = await idbGetMeta('goals') || {weight:null,weekly:null,deadline:null};
+  state.water = await idbGetMeta('water') || {date:todayISO(),intake:0,goal:3000};
+  analyze();
+  renderAll();
+}
+function saveGoals(g){ state.goals=g; idbPutMeta('goals',g).then(()=>{ renderGoals(); renderKPIs(); renderChart(); }) }
+function saveWater(w){ state.water=w; idbPutMeta('water',w).then(()=> renderWater()) }
+
+// ---------- Analytics via worker ----------
+async function analyze(){
+  const w = await ensureWorker();
+  return new Promise((res)=>{
+    w.onmessage=(e)=>{ if(e.data && e.data.type==='ANALYZE_DONE'){ state.analysis=e.data.payload; renderInsights(); res() } };
+    w.postMessage({type:'ANALYZE', payload: state.entries});
+  });
+}
+
+// ---------- Chart ----------
 let chart, showAvg=false, range='all';
 function computeMovingAvg(arr,n=7){ const out=[]; for(let i=0;i<arr.length;i++){ const w=arr.slice(Math.max(0,i-n+1),i+1).filter(x=>x!=null); out.push(w.length? w.reduce((a,b)=>a+b,0)/w.length : null) } return out }
 function filterByRange(entries,days){ if(days==='all') return entries; const c=new Date(); c.setDate(c.getDate()-Number(days)); return entries.filter(e=> new Date(e.date)>=c) }
-function renderChart(){
-  const all=getEntries(); const entries=filterByRange(all,range);
-  const labels=entries.map(e=>e.date), weight=entries.map(e=>e.weightKg??null), bodyFat=entries.map(e=>e.bodyFatPct??null);
-  const weightAvg= showAvg ? computeMovingAvg(weight,7) : null;
-  const ctx=$('#chart'); if(!ctx || !window.Chart) return;
+async function renderChart(){
+  await ensureCharts();
+  const elSkel=$('#chartSkel'), cvs=$('#chart');
+  const all=state.entries, entries=filterByRange(all, range);
+  const labels=entries.map(e=>e.date);
+  const weight=entries.map(e=>e.weightKg??null), bodyFat=entries.map(e=>e.bodyFatPct??null);
+  const weightAvg= showAvg ? computeMovingAvg(weight,7) : [];
+  const goalLine = (state.goals.weight!=null) ? entries.map(()=> state.goals.weight) : [];
+  const annoIdx = entries.reduce((a,e,i)=>{ if((e.notes||'').toLowerCase().includes('inbody') || (e.notes||'').toLowerCase().includes('إنبودي')) a.push(i); return a }, []);
+
   if(!chart){
-    chart = new Chart(ctx, {
-      type:'line', data:{ labels, datasets:[
-        { label:'الوزن (كجم)', data: weight, tension:.35, yAxisID:'y' },
-        { label:'دهون %', data: bodyFat, tension:.35, yAxisID:'y1' },
-        { label:'متوسط 7 أيام', data: weightAvg||[], tension:.35, yAxisID:'y', borderDash:[6,4], hidden: !showAvg }
-      ]}, options:{ responsive:true, plugins:{ zoom:{ zoom:{ wheel:{enabled:true}, pinch:{enabled:true}, mode:'x' }, pan:{ enabled:true, mode:'x'} } }, scales:{ y:{ position:'right' }, y1:{ position:'left', grid:{ drawOnChartArea:false } } } }
-    });
+    cvs.style.display='block'; elSkel.style.display='none';
+    chart = new Chart(cvs, { type:'line', data:{ labels, datasets:[
+      { label:'الوزن (كجم)', data: weight, tension:.35, yAxisID:'y', hidden: !state.toggles.w },
+      { label:'دهون %', data: bodyFat, tension:.35, yAxisID:'y1', hidden: !state.toggles.bf },
+      { label:'متوسط 7 أيام', data: weightAvg, tension:.35, yAxisID:'y', borderDash:[6,4], hidden: !showAvg },
+      { label:'الهدف', data: goalLine, tension:0, yAxisID:'y', borderDash:[2,4], pointRadius:0 }
+    ]}, options:{ responsive:true, plugins:{ zoom:{ zoom:{ wheel:{enabled:true}, pinch:{enabled:true}, mode:'x' }, pan:{ enabled:true, mode:'x'} }, tooltip:{ callbacks:{ afterBody:(ctx)=> ctx[0] ? (annoIdx.includes(ctx[0].dataIndex)? ['InBody Day'] : []) : [] } } }, scales:{ y:{ position:'right' }, y1:{ position:'left', grid:{ drawOnChartArea:false } } } });
   } else {
-    chart.data.labels=labels; chart.data.datasets[0].data=weight; chart.data.datasets[1].data=bodyFat; chart.data.datasets[2].data=weightAvg||[]; chart.data.datasets[2].hidden=!showAvg; chart.update();
+    chart.data.labels=labels;
+    chart.data.datasets[0].data=weight; chart.data.datasets[0].hidden=!state.toggles.w;
+    chart.data.datasets[1].data=bodyFat; chart.data.datasets[1].hidden=!state.toggles.bf;
+    chart.data.datasets[2].data=weightAvg; chart.data.datasets[2].hidden=!showAvg;
+    chart.data.datasets[3].data=goalLine;
+    chart.update();
   }
 }
-$$('#view-dashboard .chip[data-range]').forEach(c=> c.onclick=()=>{ $$('#view-dashboard .chip[data-range]').forEach(x=>x.classList.remove('active')); c.classList.add('active'); range=c.dataset.range; ensureCharts().then(()=>renderChart()) });
-$('#toggleAvg').onclick=(e)=>{ showAvg=!showAvg; e.target.classList.toggle('active', showAvg); ensureCharts().then(()=>renderChart()) };
+$$('#view-dashboard .chip[data-range]').forEach(c=> c.onclick=()=>{ $$('#view-dashboard .chip[data-range]').forEach(x=>x.classList.remove('active')); c.classList.add('active'); range=c.dataset.range; renderChart() });
+$('#toggleAvg').onclick=(e)=>{ showAvg=!showAvg; e.target.classList.toggle('active', showAvg); renderChart() };
 $('#resetZoom').onclick=()=>{ if(chart && chart.resetZoom) chart.resetZoom() };
+$('#toggleW').onclick=(e)=>{ state.toggles.w=!state.toggles.w; e.target.textContent= state.toggles.w ? 'إخفاء الوزن' : 'إظهار الوزن'; renderChart() };
+$('#toggleBF').onclick=(e)=>{ state.toggles.bf=!state.toggles.bf; e.target.textContent= state.toggles.bf ? 'إخفاء الدهون%' : 'إظهار الدهون%'; renderChart() };
 
-// KPIs + Insights badges
-function regressionETA(){ const entries=getEntries(); const g=load(LS.GOALS,{weight:null}); const latest=entries[entries.length-1]; if(!latest||!g.weight) return '—';
-  const n=Math.min(30, entries.length); const xs=[], ys=[]; for(let i=entries.length-n;i<entries.length;i++){ if(i>=0){ const k=i-(entries.length-n); xs.push(k); ys.push(entries[i].weightKg??null) } }
-  const clean=ys.map((y,i)=>[xs[i],y]).filter(p=>p[1]!=null); if(clean.length<2) return '—';
-  const sumX=clean.reduce((a,b)=>a+b[0],0), sumY=clean.reduce((a,b)=>a+b[1],0); const sumXY=clean.reduce((a,b)=>a+b[0]*b[1],0); const sumXX=clean.reduce((a,b)=>a+b[0]*b[0],0); const n2=clean.length;
-  const slope=(n2*sumXY - sumX*sumY)/(n2*sumXX - sumX*sumX || 1e-9); if(Math.abs(slope)<0.001) return 'غير واضح';
-  const intercept=(sumY - slope*sumX)/n2; const target=g.weight; // days to reach
-  const xTarget = (target - intercept)/slope; const daysRemaining = Math.max(0, Math.round(xTarget - xs[xs.length-1]));
-  const when = new Date(); when.setDate(when.getDate()+daysRemaining);
-  return daysRemaining>365? 'بعيد' : when.toISOString().slice(0,10);
+// ---------- Monthly overview ----------
+function monthlyStats(){
+  const byMonth={};
+  for(const e of state.entries){ const m=e.date.slice(0,7); byMonth[m]=byMonth[m]||{count:0, sumW:0, maxW:-1e9, minW:1e9, first:null, last:null}; const v=e.weightKg; if(v!=null){ byMonth[m].count++; byMonth[m].sumW+=v; byMonth[m].maxW=Math.max(byMonth[m].maxW,v); byMonth[m].minW=Math.min(byMonth[m].minW,v); byMonth[m].first=byMonth[m].first??v; byMonth[m].last=v; } }
+  const cards=[]; Object.entries(byMonth).forEach(([m,o])=>{ const avg = o.count? (o.sumW/o.count).toFixed(1) : '—'; const change = (o.last!=null && o.first!=null) ? (o.last-o.first).toFixed(1) : '—'; cards.push(`<div class="card"><div class="title">${m}</div><div class="kpi"><div class="h">متوسط</div><div class="v">${avg}</div></div><div class="kpi"><div class="h">أعلى/أقل</div><div class="v">${o.maxW.toFixed?o.maxW.toFixed(1):'—'} / ${o.minW.toFixed?o.minW.toFixed(1):'—'}</div></div><div class="kpi"><div class="h">صافي التغير</div><div class="v">${change}</div></div></div>`) });
+  $('#monthly').innerHTML = cards.join('');
 }
-function detectPlateau(){ const entries=getEntries().slice(-14); const ys=entries.map(e=>e.weightKg).filter(x=>x!=null); if(ys.length<8) return null; const diffs=ys.slice(1).map((v,i)=>v-ys[i]); const avg = diffs.reduce((a,b)=>a+b,0)/diffs.length; const varr = diffs.reduce((a,b)=>a+(b-avg)**2,0)/diffs.length; if(Math.abs(avg)<0.02 && Math.sqrt(varr)<0.2) return 'ثبات وزن ١٤ يوم'; return null }
-function waterCompliance(){ // last 7 days completion %
-  const today=new Date(); let ok=0, total=0; for(let i=0;i<7;i++){ const d=new Date(); d.setDate(today.getDate()-i); const key='inbody.water.v53'; const rec=load(key,null); // we only store today's water; just approximate using entries notes => fallback
-    if(rec && rec.date===d.toISOString().slice(0,10)){ total++; if((rec.intake||0) >= (rec.goal||3000)) ok++; }
+
+// ---------- KPIs & Insights ----------
+function renderKPIs(){
+  const h = parseF($('#height')?.value)/100;
+  const latest=state.entries[state.entries.length-1], prev=state.entries[state.entries.length-2];
+  if(latest){
+    $('#kpiWeight').textContent=nf(latest.weightKg);
+    $('#kpiBodyFat').textContent=nf(latest.bodyFatPct);
+    $('#kpiBMI').textContent= (h && latest.weightKg)? (latest.weightKg/(h*h)).toFixed(1) : '—';
+    if(prev && prev.weightKg!=null){ const d=latest.weightKg-prev.weightKg; $('#deltaWeight').textContent=`${d>0?'+':''}${d.toFixed(1)} كجم`; $('#deltaWeight').className='delta '+(d>0?'up':d<0?'down':'') }
+    if(prev && prev.bodyFatPct!=null){ const d=latest.bodyFatPct-prev.bodyFatPct; $('#deltaBodyFat').textContent=`${d>0?'+':''}${d.toFixed(1)}٪`; $('#deltaBodyFat').className='delta '+(d>0?'up':d<0?'down':'') }
+  } else { $('#kpiWeight').textContent='—'; $('#kpiBodyFat').textContent='—'; $('#kpiBMI').textContent='—'; $('#deltaWeight').textContent=''; $('#deltaBodyFat').textContent='' }
+  // ETA
+  let eta='—';
+  if(state.analysis && state.analysis.regression && state.goals.weight!=null){
+    const {slope,intercept}=state.analysis.regression;
+    if(Math.abs(slope)>0.001){
+      const xTarget = (state.goals.weight - intercept)/slope;
+      const daysRemaining = Math.round(Math.max(0, xTarget - (state.entries.length-1)));
+      const when = new Date(); when.setDate(when.getDate()+daysRemaining); eta = when.toISOString().slice(0,10);
+    } else { eta='غير واضح' }
   }
-  return total? Math.round(ok/total*100) : 0;
-}
-function renderKPIsAndInsights(){
-  const entries=getEntries(); const h=parseF(el.height?.value)/100;
-  const latest=entries[entries.length-1], prev=entries[entries.length-2];
-  if(latest){ el.kpiWeight.textContent=nf(latest.weightKg); el.kpiBodyFat.textContent=nf(latest.bodyFatPct); el.kpiBMI.textContent=(h&&latest.weightKg)?(latest.weightKg/(h*h)).toFixed(1):'—'; if(prev&&prev.weightKg!=null){ const d=latest.weightKg-prev.weightKg; el.deltaWeight.textContent=`${d>0?'+':''}${d.toFixed(1)} كجم`; el.deltaWeight.className='delta '+(d>0?'up':'down') } if(prev&&prev.bodyFatPct!=null){ const d=latest.bodyFatPct-prev.bodyFatPct; el.deltaBodyFat.textContent=`${d>0?'+':''}${d.toFixed(1)}٪`; el.deltaBodyFat.className='delta '+(d>0?'up':'down') } } else { el.kpiWeight.textContent='—'; el.kpiBodyFat.textContent='—'; el.kpiBMI.textContent='—'; el.deltaWeight.textContent=''; el.deltaBodyFat.textContent='' }
-  el.kpiETA.textContent = regressionETA();
-
-  const badges=[]; const plateau=detectPlateau(); if(plateau) badges.push('⚠️ '+plateau); const compl=waterCompliance(); badges.push('💧 التزام ماء 7 أيام: '+compl+'%'); const count=getEntries().length; if(count>=10) badges.push('🏅 10 قراءات'); if(count>=50) badges.push('🥇 50 قراءة'); el.insightsBadges.innerHTML = badges.map(b=>`<div class="badge">${b}</div>`).join(''); el.badges.innerHTML = el.insightsBadges.innerHTML;
+  $('#kpiETA').textContent=eta;
 }
 
-// Goals
-function loadGoals(){ return load(LS.GOALS,{weight:null,bodyFat:null,weekly:null,deadline:null}) }
-function saveGoals(g){ save(LS.GOALS,g); renderGoals(g); renderKPIsAndInsights() }
-function renderGoals(g){
-  el.goalWeight.value=g.weight??''; el.goalBodyFat.value=g.bodyFat??''; el.goalWeekly.value=g.weekly??''; el.goalDeadline.value=g.deadline??'';
-  const entries=getEntries(); const latest=entries[entries.length-1]; let txt=''; if(latest && g.weight && g.weekly){ const weeks=Math.abs((latest.weightKg-g.weight)/g.weekly); txt=`تقدير: ${weeks.toFixed(1)} أسبوع.` } el.etaText.textContent=txt;
+function renderInsights(){
+  monthlyStats();
+  const badges=[];
+  if(state.analysis?.plateau) badges.push('⚠️ ثبات ١٤ يوم');
+  const count=state.entries.length; if(count>=10) badges.push('🏅 10 قراءات'); if(count>=50) badges.push('🥇 50 قراءة');
+  $('#badges').innerHTML = badges.map(b=>`<div class="badge">${b}</div>`).join('');
 }
-el.saveGoals.onclick=()=>{ const g=loadGoals(); g.weight=parseF(el.goalWeight.value); g.bodyFat=parseF(el.goalBodyFat.value); g.weekly=parseF(el.goalWeekly.value); g.deadline=el.goalDeadline.value||null; saveGoals(g) };
-el.clearGoals.onclick=()=> saveGoals({weight:null,bodyFat:null,weekly:null,deadline:null});
 
-// Water
-function waterState(){ const d=load(LS.WATER,null); const today=todayISO(); if(!d || d.date!==today){ return { date: today, intake: 0, goal: 3000 } } return d }
-function saveWater(s){ save(LS.WATER,s); renderWater(s) }
-function renderWater(s){ el.waterGoal.value=s.goal; const pct=Math.max(0,Math.min(100,Math.round((s.intake/Math.max(s.goal,1))*100))); el.waterPct.textContent=pct+'%'; el.waterRing.style.transform=`rotate(${pct/100*360-90}deg)` }
-function addWater(ml){ const s=waterState(); s.intake=Math.max(0,s.intake+ml); saveWater(s); try{ if('Notification' in window && Notification.permission==='granted'){ new Notification('تم تسجيل الماء',{ body:`+${ml} مل • ${s.intake}/${s.goal} مل` }) } }catch(_){ } }
-$$('.chip[data-add]').forEach(b=> b.onclick=()=>{ const ml=parseInt(b.dataset.add); if(ml>0) addWater(ml) });
-$('#addCustom').onclick=()=>{ const v=parseInt(el.waterCustom.value||'0'); if(v>0) addWater(v) };
-$('#waterGoal').addEventListener('input', ()=>{ const s=waterState(); s.goal=parseInt(el.waterGoal.value||'0')||3000; saveWater(s) });
+// ---------- Planner + Simulation + Streaks ----------
+function renderPlanner(){
+  const days=['السبت','الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة'];
+  const today = new Date(); const idx = (n)=> new Date(today.getFullYear(), today.getMonth(), today.getDate()+n).toISOString().slice(0,10);
+  const chips=[]; for(let i=0;i<7;i++){ const d=idx(i); const name=days[(today.getDay()+i)%7]; chips.push(`<button class="chip" data-plan="${d}">${name} • ${d}</button>`) }
+  $('#planner').innerHTML = chips.join('');
+  $$('#planner .chip').forEach(b=> b.onclick=()=>{ b.classList.toggle('active'); vibrate(8) });
+}
+$('#simWeekly').oninput=()=>{
+  const latest=state.entries[state.entries.length-1]; const gw=state.goals.weight;
+  if(!latest || gw==null){ $('#simETA').textContent='—'; return }
+  const rate=parseF($('#simWeekly').value)||-0.5;
+  const weeks=Math.abs((latest.weightKg - gw)/rate); const days=Math.round(weeks*7);
+  const when=new Date(); when.setDate(when.getDate()+days); $('#simETA').textContent=when.toISOString().slice(0,10);
+};
+
+// ---------- Forms ----------
+function updateBMI(){ const w=parseF($('#weight')?.value), h=parseF($('#height')?.value)/100; const bf=parseF($('#bodyFat')?.value); $('#bmi').value=(w&&h)?(w/(h*h)).toFixed(1):''; $('#autoCalcs').textContent = (w!=null && bf!=null)? (`كتلة دهنية: ${(w*bf/100).toFixed(1)}كجم • كتلة صافية: ${(w-w*bf/100).toFixed(1)}كجم`) : '—' }
+document.addEventListener('input', ev=>{ if(['weight','height','bodyFat'].includes(ev.target.id)) updateBMI() });
+
+async function saveEntry(obj){
+  // replace if same date exists
+  const existing = state.entries.find(x=> x.date===obj.date && x.id!==obj.id);
+  if(existing){ await idbDelEntry(existing.id) }
+  await idbPutEntry(obj);
+  await refreshState();
+  toast('تم الحفظ');
+}
+
+$('#saveBtn').onclick=async()=>{
+  const d=$('#date').value; if(!d) return alert('اختر تاريخًا'); if(new Date(d)>new Date()) return alert('تاريخ مستقبل!');
+  const w=parseF($('#weight').value); if(w==null) return alert('الوزن مطلوب');
+  const obj={ id:uid(), date:d, weightKg:w, bodyFatPct:parseF($('#bodyFat').value), muscleKg:parseF($('#muscle').value), waterPct:parseF($('#water').value), visceralFat:parseF($('#visceral').value), bmr:parseF($('#bmr').value)?parseInt($('#bmr').value):null, bmi:$('#bmi').value?parseFloat($('#bmi').value):null, notes:($('#notes').value||'').trim() };
+  await saveEntry(obj);
+  $('#date').value=todayISO(); ['weight','bodyFat','muscle','water','visceral','bmr','notes'].forEach(id=> $('#'+id).value=''); updateBMI();
+};
+$('#copyLast').onclick=()=>{ const last=state.entries[state.entries.length-1]; if(!last) return alert('لا توجد قراءة سابقة'); $('#date').value=todayISO(); $('#weight').value=last.weightKg??''; $('#bodyFat').value=last.bodyFatPct??''; $('#muscle').value=last.muscleKg??''; $('#water').value=last.waterPct??''; $('#visceral').value=last.visceralFat??''; $('#bmr').value=last.bmr??''; $('#notes').value=last.notes||''; updateBMI() };
+$$('.chip[data-preset]').forEach(c=> c.onclick=()=>{ const p=c.dataset.preset; const dt=new Date(); if(p!=='today') dt.setDate(dt.getDate()+Number(p)); $('#date').value=dt.toISOString().slice(0,10) });
+
+// Quick Add ± controls
+$('#minusW').onclick=()=>{ const v=parseF($('#qaWeight').value)||0; $('#qaWeight').value=(v-0.2).toFixed(1); vibrate(8) };
+$('#plusW').onclick=()=>{ const v=parseF($('#qaWeight').value)||0; $('#qaWeight').value=(v+0.2).toFixed(1); vibrate(8) };
+$('#qaSave').onclick=async()=>{
+  const w=parseF($('#qaWeight').value); const bf=parseF($('#qaBodyFat').value);
+  if(w==null) return alert('اكتب وزنًا');
+  const today=todayISO(); const last=state.entries[state.entries.length-1]; if(last && last.weightKg!=null){ const diff=Math.abs(w-last.weightKg); if(diff>5){ if(!confirm(`فرق كبير (${diff.toFixed(1)} كجم). متأكد؟`)) return } }
+  await saveEntry({ id:uid(), date:today, weightKg:w, bodyFatPct:bf??null, notes:'' });
+  $('#qaWeight').value=''; $('#qaBodyFat').value='';
+};
+$$('.chip[data-qa-add]').forEach(b=> b.onclick=()=> addWater(parseInt(b.dataset.qaAdd)) );
+$('#qaInBody').onclick=()=>{ location.hash='add'; $('#bodyFat').focus() };
+
+// Goals + Planner
+$('#saveGoals').onclick=()=>{ const g={ weight: parseF($('#goalWeight').value), weekly: parseF($('#goalWeekly').value), deadline: $('#goalDeadline').value||null }; saveGoals(g); toast('تم حفظ الأهداف') };
+$('#clearGoals').onclick=()=> saveGoals({weight:null,weekly:null,deadline:null});
+
+function renderGoals(){
+  const g=state.goals||{weight:null,weekly:null,deadline:null};
+  $('#goalWeight').value=g.weight??''; $('#goalWeekly').value=g.weekly??''; $('#goalDeadline').value=g.deadline??'';
+  // sim slider reflect weekly
+  $('#simWeekly').value = g.weekly!=null ? g.weekly : -0.5;
+  $('#simWeekly').dispatchEvent(new Event('input'));
+}
+
+// Water + ICS
+function waterState(){ const d=state.water; const today=todayISO(); if(!d || d.date!==today){ return { date: today, intake: 0, goal: d?.goal||3000 } } return d }
+function renderWater(){ const s=waterState(); $('#waterGoal').value=s.goal; const pct=Math.max(0,Math.min(100,Math.round((s.intake/Math.max(s.goal,1))*100))); $('#waterPct').textContent=pct+'%'; $('#waterRing').style.transform=`rotate(${pct/100*360-90}deg)` }
+function addWater(ml){ const s=waterState(); s.intake=Math.max(0, s.intake+ml); saveWater(s); try{ if('Notification' in window && Notification.permission==='granted'){ new Notification('تم تسجيل الماء',{ body:`+${ml} مل • ${s.intake}/${s.goal} مل` }) } }catch(_){} }
+$('#addCustom').onclick=()=>{ const v=parseInt($('#waterCustom').value||'0'); if(v>0) addWater(v) };
+$('#waterGoal').addEventListener('input', ()=>{ const s=waterState(); s.goal=parseInt($('#waterGoal').value||'0')||3000; saveWater(s) });
 $('#waterReset').onclick=()=>{ const s=waterState(); s.intake=0; saveWater(s) };
-// Hydration coach
-$('#btnSuggestWater').onclick=()=>{ const h=parseF(el.height.value); const list=getEntries(); const last=list[list.length-1]; if(!last){ el.coachMsg.textContent='أدخل وزنًا أولًا'; return } const goal=Math.round((last.weightKg||75)*35); el.coachMsg.textContent=`اقتراح: ${goal} مل/يوم`; el.waterGoal.value=goal; const s=waterState(); s.goal=goal; saveWater(s) };
 
-// Reminder (quiet hours)
 let waterInterval=null; function inQuietHours(start,end,d=new Date()){ const [sh,sm]=start.split(':').map(Number); const [eh,em]=end.split(':').map(Number); const cur=d.getHours()*60+d.getMinutes(); const s=sh*60+sm, e=eh*60+em; return s<=e ? (cur>=s&&cur<e):(cur>=s||cur<e) }
-$('#waterNotify').onclick=async()=>{ try{ if(!('Notification' in window)) return alert('المتصفح لا يدعم الإشعارات'); let perm=Notification.permission; if(perm!=='granted'){ perm=await Notification.requestPermission(); } if(perm!=='granted') return alert('لم يتم السماح بالإشعارات'); if(waterInterval){ clearInterval(waterInterval); waterInterval=null; $('#waterNotify').textContent='تفعيل تذكير الماء'; return } $('#waterNotify').textContent='إيقاف تذكير الماء'; const cfg=load(LS.CFG,{waterInterval:90,quietStart:'22:00',quietEnd:'08:00'}); const tick=()=>{ const now=new Date(); if(!inQuietHours(cfg.quietStart,cfg.quietEnd,now)){ try{ const s=waterState(); new Notification('اشرب ماء 💧',{ body:`${s.intake}/${s.goal} مل` }) }catch(_){ } } }; tick(); waterInterval=setInterval(tick, (cfg.waterInterval||90)*60*1000); }catch(_){ } };
-$('#icsBtn').onclick=()=>{ const ics=`BEGIN:VCALENDAR
+$('#waterNotify').onclick=async()=>{ try{ if(!('Notification' in window)) return alert('لا إشعارات'); let perm=Notification.permission; if(perm!=='granted'){ perm=await Notification.requestPermission(); } if(perm!=='granted') return; if(waterInterval){ clearInterval(waterInterval); waterInterval=null; $('#waterNotify').textContent='تفعيل تذكير الماء'; return } $('#waterNotify').textContent='إيقاف تذكير الماء'; const cfg={waterInterval:90,quietStart:'22:00',quietEnd:'08:00'}; const tick=()=>{ const now=new Date(); if(!inQuietHours(cfg.quietStart,cfg.quietEnd,now)){ try{ const s=waterState(); new Notification('اشرب ماء 💧',{ body:`${s.intake}/${s.goal} مل` }) }catch(_){ } } }; tick(); waterInterval=setInterval(tick, 90*60*1000); }catch(_){ } };
+
+// Advanced ICS
+$('#icsAdvBtn').onclick=()=>{
+  const from=$('#icsFrom').value||'09:00', to=$('#icsTo').value||'21:00', every=parseInt($('#icsEvery').value||'90');
+  const now=new Date(); const dt=now.toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
+  const ev = []
+  # noqa
+  ICS = f"""BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//InBody Ultra 5.3//Water//AR
+PRODID:-//InBody Ultra 5.6//Water//AR
 BEGIN:VEVENT
-UID:${uid()}@inbody-ultra
-DTSTAMP:${new Date().toISOString().replace(/[-:]/g,'').split('.')[0]}Z
+UID:{uid()}@inbody-ultra
+DTSTAMP:{dt}
 SUMMARY:اشرب ماء 💧
-RRULE:FREQ=DAILY;INTERVAL=1
-DTSTART:${new Date().toISOString().replace(/[-:]/g,'').split('.')[0]}Z
+RRULE:FREQ=DAILY
+DTSTART:{dt}
 DURATION:PT0M
 BEGIN:VALARM
 TRIGGER:-PT0M
-REPEAT:1
-DURATION:PT120M
+REPEAT:6
+DURATION:PT{every}M
 ACTION:DISPLAY
 DESCRIPTION:اشرب ماء
 END:VALARM
 END:VEVENT
-END:VCALENDAR`.replace(/\n/g,'\r\n'); const blob=new Blob([ics],{type:'text/calendar'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='water-reminder.ics'; a.click(); URL.revokeObjectURL(url) };
+END:VCALENDAR"""
+""".replace('# noqa','');
+  const blob=new Blob([ICS.replace(/\n/g,'\r\n')],{type:'text/calendar'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='water-smart.ics'; a.click(); URL.revokeObjectURL(url);
+};
 
-// History paging + inline edit + CSV templates
-let historyRange='all', page=0, pageSize=100;
-function pageEntries(list){ const start=page*pageSize; return list.slice(start, start+pageSize) }
-function renderTable(){
-  const q=($('#searchNotes')?.value||'').trim().toLowerCase(); let entries=getEntries();
+// ---------- Virtualized history ----------
+let historyRange='all';
+function filterHistory(){
+  const q=($('#searchNotes')?.value||'').trim().toLowerCase();
+  let entries=state.entries;
   if(historyRange!=='all'){ const c=new Date(); c.setDate(c.getDate()-Number(historyRange)); entries=entries.filter(e=> new Date(e.date)>=c) }
   if(q) entries=entries.filter(e=> (e.notes||'').toLowerCase().includes(q));
-  const total=entries.length; const rows=pageEntries(entries); el.pagingInfo.textContent = `عرض ${(page*pageSize)+1}-${(page*pageSize)+rows.length} من ${total}`;
-  el.tableBody.innerHTML='';
-  for(const e of rows){
-    const tr=document.createElement('tr'); const td=v=>{ const x=document.createElement('td'); x.textContent=v; return x };
-    const tdDate=td(e.date); tdDate.contentEditable='true'; tdDate.onblur=()=>{ const old=e.date; e.date=tdDate.textContent.trim().slice(0,10); saveEntries(getEntries().map(x=>x.id===e.id?e:x)); renderAll(); snack('تم التعديل', ()=>{ e.date=old; saveEntries(getEntries().map(x=>x.id===e.id?e:x)); renderAll() }) };
-    const tdW=td(nf(e.weightKg)); tdW.contentEditable='true'; tdW.onblur=()=>{ const old=e.weightKg; e.weightKg=parseF(tdW.textContent); saveEntries(getEntries().map(x=>x.id===e.id?e:x)); renderAll(); snack('تم التعديل', ()=>{ e.weightKg=old; saveEntries(getEntries().map(x=>x.id===e.id?e:x)); renderAll() }) };
-    const tdBF=td(nf(e.bodyFatPct)); tdBF.contentEditable='true'; tdBF.onblur=()=>{ const old=e.bodyFatPct; e.bodyFatPct=parseF(tdBF.textContent); saveEntries(getEntries().map(x=>x.id===e.id?e:x)); renderAll(); snack('تم التعديل', ()=>{ e.bodyFatPct=old; saveEntries(getEntries().map(x=>x.id===e.id?e:x)); renderAll() }) };
-    const tdM=td(nf(e.muscleKg)); tdM.contentEditable='true'; tdM.onblur=()=>{ const old=e.muscleKg; e.muscleKg=parseF(tdM.textContent); saveEntries(getEntries().map(x=>x.id===e.id?e:x)); renderAll(); snack('تم التعديل', ()=>{ e.muscleKg=old; saveEntries(getEntries().map(x=>x.id===e.id?e:x)); renderAll() }) };
-    const tdWa=td(nf(e.waterPct)); tdWa.contentEditable='true'; tdWa.onblur=()=>{ const old=e.waterPct; e.waterPct=parseF(tdWa.textContent); saveEntries(getEntries().map(x=>x.id===e.id?e:x)); renderAll(); snack('تم التعديل', ()=>{ e.waterPct=old; saveEntries(getEntries().map(x=>x.id===e.id?e:x)); renderAll() }) };
-    const tdV=td(nf(e.visceralFat)); tdV.contentEditable='true'; tdV.onblur=()=>{ const old=e.visceralFat; e.visceralFat=parseF(tdV.textContent); saveEntries(getEntries().map(x=>x.id===e.id?e:x)); renderAll(); snack('تم التعديل', ()=>{ e.visceralFat=old; saveEntries(getEntries().map(x=>x.id===e.id?e:x)); renderAll() }) };
-    const tdBMR=td(e.bmr??'—'); tdBMR.contentEditable='true'; tdBMR.onblur=()=>{ const old=e.bmr; e.bmr=parseF(tdBMR.textContent)?parseInt(tdBMR.textContent):null; saveEntries(getEntries().map(x=>x.id===e.id?e:x)); renderAll(); snack('تم التعديل', ()=>{ e.bmr=old; saveEntries(getEntries().map(x=>x.id===e.id?e:x)); renderAll() }) };
-    const tdBMI=td(e.bmi??'—'); tdBMI.contentEditable='true'; tdBMI.onblur=()=>{ const old=e.bmi; e.bmi=parseF(tdBMI.textContent); saveEntries(getEntries().map(x=>x.id===e.id?e:x)); renderAll(); snack('تم التعديل', ()=>{ e.bmi=old; saveEntries(getEntries().map(x=>x.id===e.id?e:x)); renderAll() }) };
-    const tdNotes=td(e.notes||'—'); tdNotes.contentEditable='true'; tdNotes.onblur=()=>{ const old=e.notes; e.notes=tdNotes.textContent.trim(); saveEntries(getEntries().map(x=>x.id===e.id?e:x)); snack('تم التعديل', ()=>{ e.notes=old; saveEntries(getEntries().map(x=>x.id===e.id?e:x)); renderAll() }) };
-    const actions=document.createElement('td'); actions.style.display='flex'; actions.style.gap='6px';
-    const b1=document.createElement('button'); b1.textContent='تعديل'; b1.className='ghost'; b1.onclick=()=>{ window.editingId=e.id; fillForm(e) };
-    const b2=document.createElement('button'); b2.textContent='حذف'; b2.className='ghost'; b2.onclick=()=>{ if(confirm('حذف هذه القراءة؟')){ const oldList=getEntries(); backupAll(); saveEntries(oldList.filter(x=>x.id!==e.id)); renderAll(); snack('تم الحذف', ()=>{ restoreBackup() }) } };
-    actions.appendChild(b1); actions.appendChild(b2);
-    [tdDate,tdW,tdBF,tdM,tdWa,tdV,tdBMR,tdBMI,tdNotes,actions].forEach(x=> tr.appendChild(x));
-    el.tableBody.appendChild(tr);
+  return entries;
+}
+function renderVTable(){
+  const cont=$('#vtable'); const rowH=38;
+  const data=filterHistory();
+  const totalH=data.length*rowH;
+  cont.innerHTML='';
+  const spacerTop=document.createElement('div'); spacerTop.className='vspacer'; spacerTop.style.height='0px';
+  const viewport=document.createElement('div');
+  const spacerBot=document.createElement('div'); spacerBot.className='vspacer'; spacerBot.style.height= Math.max(0,totalH) + 'px';
+  cont.appendChild(spacerTop); cont.appendChild(viewport); cont.appendChild(spacerBot);
+
+  function draw(){
+    const scrollTop=cont.scrollTop;
+    const height=cont.clientHeight;
+    const start=Math.max(0, Math.floor(scrollTop/rowH)-5);
+    const end=Math.min(data.length, start + Math.ceil(height/rowH)+10);
+    spacerTop.style.height = (start*rowH)+'px';
+    spacerBot.style.height = (totalH - end*rowH)+'px';
+    viewport.innerHTML='';
+    for(let i=start;i<end;i++){
+      const e=data[i];
+      const div=document.createElement('div'); div.className='row';
+      function cell(v){ const c=document.createElement('div'); c.textContent=v; return c }
+      const editBtn=document.createElement('button'); editBtn.textContent='تعديل'; editBtn.className='ghost'; editBtn.onclick=()=>{ location.hash='add'; $('#date').value=e.date; $('#weight').value=e.weightKg??''; $('#bodyFat').value=e.bodyFatPct??''; $('#muscle').value=e.muscleKg??''; $('#water').value=e.waterPct??''; $('#visceral').value=e.visceralFat??''; $('#bmr').value=e.bmr??''; $('#bmi').value=e.bmi??''; $('#notes').value=e.notes||''; }
+      const delBtn=document.createElement('button'); delBtn.textContent='حذف'; delBtn.className='ghost'; delBtn.onclick=async()=>{ if(confirm('حذف هذه القراءة؟')){ await idbDelEntry(e.id); await refreshState(); toast('تم الحذف') } };
+      [cell(e.date),cell(nf(e.weightKg)),cell(nf(e.bodyFatPct)),cell(nf(e.muscleKg)),cell(nf(e.waterPct)),cell(nf(e.visceralFat)),cell(e.bmr??'—'),cell(e.bmi??'—'),cell(e.notes||'—')].forEach(x=> div.appendChild(x));
+      const actions=document.createElement('div'); actions.appendChild(editBtn); actions.appendChild(delBtn); div.appendChild(actions);
+      viewport.appendChild(div);
+    }
   }
-  // paging controls
-  const totalPages=Math.ceil(total/pageSize)||1;
-  el.pagingInfo.innerHTML += ` — صفحة ${page+1}/${totalPages} <button id="pPrev" class="ghost">السابق</button> <button id="pNext" class="ghost">التالي</button>`;
-  $('#pPrev').onclick=()=>{ page=Math.max(0,page-1); renderTable() };
-  $('#pNext').onclick=()=>{ page=Math.min(totalPages-1,page+1); renderTable() };
+  cont.onscroll=draw; draw();
 }
-$('#searchNotes').addEventListener('input', renderTable);
-$$('#view-history .chip[data-range]').forEach(c=> c.onclick=()=>{ $$('#view-history .chip[data-range]').forEach(x=>x.classList.remove('active')); c.classList.add('active'); historyRange=c.dataset.range; page=0; renderTable() });
+$('#searchNotes').addEventListener('input', renderVTable);
+$$('#view-history .chip[data-range]').forEach(c=> c.onclick=()=>{ $$('#view-history .chip[data-range]').forEach(x=>x.classList.remove('active')); c.classList.add('active'); historyRange=c.dataset.range; renderVTable() });
 
-// CSV template mapping
+// ---------- CSV import/export with saved profile ----------
 function parseCSV(text){ const lines=text.split(/\r?\n/).filter(x=>x.trim().length); if(!lines.length) return null; const header=lines[0].split(',').map(h=>h.trim().toLowerCase()); const rows=lines.slice(1).map(l=> l.split(',')); return {header, rows} }
-function applyTemplateMap(tpl, header){ const idx=(name)=> header.findIndex(h=> h.includes(name)); const map={}; if(tpl==='inbody'){ map.date=idx('date'); map.weightKg=idx('weight'); map.bodyFatPct=idx('body fat'); map.muscleKg=idx('muscle'); } else if(tpl==='miscale'){ map.date=idx('date'); map.weightKg=idx('weight'); } else { // auto
-  ['date','weightKg','bodyFatPct','muscleKg','waterPct','visceralFat','bmr','bmi','notes'].forEach(f=>{ const hname=f.replace('Kg','').replace('Pct','').replace('body','body ').replace('weight','weight'); const i= header.findIndex(h=> h.includes(hname.replace('muscle','muscle')) || (f==='date' && h.includes('date')) ); if(i>=0) map[f]=i; });
- }
- return map;
+function applyTemplateMap(tpl, header){
+  const saved=JSON.parse(localStorage.getItem(LS.CSVPROF)||'{}');
+  if(saved[tpl] && Array.isArray(saved[tpl].header) && JSON.stringify(saved[tpl].header)===JSON.stringify(header)) return saved[tpl].map;
+  const idx=(name)=> header.findIndex(h=> h.includes(name));
+  const map={}; if(tpl==='inbody'){ map.date=idx('date'); map.weightKg=idx('weight'); map.bodyFatPct=idx('body fat'); map.muscleKg=idx('muscle'); }
+  else if(tpl==='miscale'){ map.date=idx('date'); map.weightKg=idx('weight'); }
+  else { ['date','weightKg','bodyFatPct','muscleKg','waterPct','visceralFat','bmr','bmi','notes'].forEach(f=>{ const hname=f.replace('Kg','').replace('Pct','').replace('body','body ').replace('weight','weight'); const i= header.findIndex(h=> h.includes(hname.replace('muscle','muscle')) || (f==='date' && h.includes('date')) ); if(i>=0) map[f]=i; }) }
+  // save profile
+  saved[tpl]={header, map}; localStorage.setItem(LS.CSVPROF, JSON.stringify(saved));
+  return map;
 }
-$('#importCSVBtn').onclick=()=> el.importCSVFile.click();
-$('#importCSVFile').onchange=(ev)=>{ const f=ev.target.files?.[0]; if(!f) return; const reader=new FileReader(); reader.onload=()=>{ const parsed=parseCSV(reader.result); if(!parsed){ alert('CSV فارغ'); return } const map=applyTemplateMap($('#csvTemplate').value, parsed.header); const old=getEntries(); backupAll(); let list=getEntries(); parsed.rows.forEach(cols=>{ const e={ id:uid(), date: (cols[map.date]||'').slice(0,10), weightKg: parseF(cols[map.weightKg]), bodyFatPct: parseF(cols[map.bodyFatPct]), muscleKg: parseF(cols[map.muscleKg]), waterPct: parseF(cols[map.waterPct]), visceralFat: parseF(cols[map.visceralFat]), bmr: parseF(cols[map.bmr])?parseInt(cols[map.bmr]):null, bmi: parseF(cols[map.bmi]), notes: (cols[map.notes]||'').trim() }; if(e.date) list.push(e) }); saveEntries(list.sort((a,b)=>a.date.localeCompare(b.date))); renderAll(); snack('تم استيراد CSV', ()=>{ saveEntries(old); renderAll() }) }; reader.readAsText(f) };
+$('#importCSVBtn').onclick=()=> $('#importCSVFile').click();
+$('#importCSVFile').onchange=(ev)=>{ const f=ev.target.files?.[0]; if(!f) return; const reader=new FileReader(); reader.onload=async()=>{ const parsed=parseCSV(reader.result); if(!parsed){ alert('CSV فارغ'); return } const map=applyTemplateMap($('#csvTemplate').value, parsed.header); for(const cols of parsed.rows){ const e={ id:uid(), date: (cols[map.date]||'').slice(0,10), weightKg: parseF(cols[map.weightKg]), bodyFatPct: parseF(cols[map.bodyFatPct]), muscleKg: parseF(cols[map.muscleKg]), waterPct: parseF(cols[map.waterPct]), visceralFat: parseF(cols[map.visceralFat]), bmr: parseF(cols[map.bmr])?parseInt(cols[map.bmr]):null, bmi: parseF(cols[map.bmi]), notes: (cols[map.notes]||'').trim() }; if(e.date) await idbPutEntry(e) } await refreshState(); toast('تم استيراد CSV') }; reader.readAsText(f) };
+$('#exportCSVBtn').onclick=async()=>{ const cols=['date','weightKg','bodyFatPct','muscleKg','waterPct','visceralFat','bmr','bmi','notes']; const head=cols.join(','); const all=state.entries; const rows=all.map(e=> cols.map(c=> (e[c]==null?'':String(e[c]).replace(/,/g,' '))).join(',')); const csv=[head].concat(rows).join('\n'); const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='inbody.csv'; a.click(); URL.revokeObjectURL(url) };
+$('#exportBtn').onclick=async()=>{ const data=JSON.stringify({goals:state.goals,water:state.water,entries:state.entries},null,2); const blob=new Blob([data],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`inbody-ultra-${todayISO()}.json`; a.click(); URL.revokeObjectURL(url) };
+$('#importBtn').onclick=()=> $('#importFile').click();
+$('#importFile').onchange=(ev)=>{ const f=ev.target.files?.[0]; if(!f) return; const reader=new FileReader(); reader.onload=async()=>{ try{ const obj=JSON.parse(reader.result); if(obj.goals) await idbPutMeta('goals', obj.goals); if(obj.water) await idbPutMeta('water', obj.water); if(Array.isArray(obj.entries)){ for(const e of obj.entries) await idbPutEntry(e) } await refreshState(); toast('تم استيراد JSON') }catch(_){ alert('JSON غير صالح') } }; reader.readAsText(f) };
 
-$('#exportCSVBtn').onclick=()=>{ const cols=['date','weightKg','bodyFatPct','muscleKg','waterPct','visceralFat','bmr','bmi','notes']; const head=cols.join(','); const rows=getEntries().map(e=> cols.map(c=> (e[c]==null?'':String(e[c]).replace(/,/g,' '))).join(',')); const csv=[head].concat(rows).join('\n'); const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='inbody.csv'; a.click(); URL.revokeObjectURL(url) };
+// Snapshot v2 (inline chart image + QR via inline script)
+$('#snapshotBtn').onclick=async()=>{
+  await ensureCharts();
+  // make tiny chart image
+  const cvs=document.createElement('canvas'); cvs.width=600; cvs.height=260;
+  const ctx=cvs.getContext('2d');
+  const labels=state.entries.slice(-30).map(e=>e.date);
+  const data=state.entries.slice(-30).map(e=>e.weightKg??null);
+  new Chart(ctx,{type:'line',data:{labels,datasets:[{label:'Weight',data,tension:.35}]}});
+  await new Promise(r=> setTimeout(r, 60));
+  const img=cvs.toDataURL('image/png');
+  const html=`<!doctype html><meta charset="utf-8"><title>InBody Snapshot</title>
+<style>body{{font-family:system-ui;max-width:720px;margin:20px auto;padding:10px}} .card{{border:1px solid #ddd;border-radius:12px;padding:12px;margin:10px 0}} img{{max-width:100%}}</style>
+<h1>InBody Snapshot</h1>
+<div class="card"><h3>Chart (last 30)</h3><img src="{img}"></div>
+<div class="card"><h3>Latest</h3><pre>{latest}</pre></div>
+<div class="card"><h3>Share</h3><div id="qrcode"></div><p><a href="{url}">{url}</a></p></div>
+<script>
+// tiny QR (qrcode.min.js inline)
+{qrcode}
+var q = new QRCode(document.getElementById('qrcode'), {{ text: '{url}', width: 128, height: 128 }});
+</script>
+`.replace('{img}', img).replace('{latest}', JSON.stringify(state.entries.slice(-1)[0]||{}, null, 2)).replace(/{url}/g, location.href.split('?')[0]);
+  // simple tiny qrcode library (minimal)
+  const qrcode_js = `
+  /* Minimal QR stub: draws an empty box if generation not available */
+  function QRCode(el, opts){ var d=document.createElement('div'); d.style.width=opts.width+'px'; d.style.height=opts.height+'px'; d.style.border='1px solid #333'; d.style.display='inline-block'; d.title=opts.text; el.appendChild(d); }
+  `;
+  const blob=new Blob([html.replace('{qrcode}', qrcode_js)],{type:'text/html'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='snapshot.html'; a.click(); URL.revokeObjectURL(url);
+};
 
-// JSON Export/Import + Snapshot HTML
-$('#exportBtn').onclick=()=>{ const data=JSON.stringify({heightCm:parseF(el.height?.value)||null,goals:load(LS.GOALS,null),water:load(LS.WATER,null),entries:getEntries()},null,2); const blob=new Blob([data],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`inbody-ultra-${todayISO()}.json`; a.click(); URL.revokeObjectURL(url) };
-$('#importBtn').onclick=()=> el.importFile.click();
-$('#importFile').onchange=(ev)=>{ const f=ev.target.files?.[0]; if(!f) return; const reader=new FileReader(); reader.onload=()=>{ try{ const old=backupAll(); const obj=JSON.parse(reader.result); if(obj.heightCm!=null) el.height.value=obj.heightCm; if(obj.goals) save(LS.GOALS,obj.goals); if(obj.water) save(LS.WATER,obj.water); if(Array.isArray(obj.entries)) save(LS.ENTRIES,obj.entries); renderAll(); snack('تم استيراد JSON', ()=>{ saveEntries(old.entries); save(LS.GOALS, old.goals); save(LS.WATER, old.water); if(old.height!=null) save(LS.HEIGHT, old.height); renderAll() }) }catch(e){ alert('ملف JSON غير صالح') } }; reader.readAsText(f) };
+// Settings + Diagnostics
+function loadSettings(){ const tc = JSON.parse(localStorage.getItem(LS.THEMECFG)||'{"accent":"#5b8cff","radius":18}'); $('#accent').value=tc.accent; $('#radius').value=tc.radius; }
+$('#saveSettings').onclick=()=>{ const cfg={accent:$('#accent').value||'#5b8cff', radius:parseInt($('#radius').value||'18')}; localStorage.setItem(LS.THEMECFG, JSON.stringify(cfg)); applyThemeCfg(cfg); toast('تم الحفظ') };
+$('#clearAll').onclick=async()=>{ if(!confirm('مسح كل البيانات؟')) return; // clear db
+  await new Promise((res)=>{ const delReq=indexedDB.deleteDatabase('inbody-ultra'); delReq.onsuccess=()=>res(); delReq.onerror=()=>res() });
+  localStorage.clear(); location.reload();
+};
+$('#btnDiagnostics').onclick=()=>{ const card=$('#diagCard'); card.style.display = (card.style.display==='none'?'block':'none'); if(card.style.display==='block'){ $('#ua').textContent=navigator.userAgent; try{ localStorage.setItem('x','1'); localStorage.removeItem('x'); $('#lsOK').textContent='OK' }catch(e){ $('#lsOK').textContent='Blocked' } $('#notif').textContent = (('Notification' in window)? Notification.permission : 'N/A'); if('serviceWorker' in navigator){ navigator.serviceWorker.getRegistrations().then(rs=> $('#sw').textContent = rs.length? 'Registered':'None') } else { $('#sw').textContent='N/A' } } };
 
-$('#snapshotBtn').onclick=()=>{ const pkg={ height:parseF(el.height?.value)||null, goals:load(LS.GOALS,null), entries:getEntries().slice(-30) }; const html=`<!doctype html><meta charset="utf-8"><title>InBody Snapshot</title><style>body{font-family:system-ui;max-width:700px;margin:20px auto;padding:10px} table{width:100%;border-collapse:collapse} th,td{border:1px solid #ddd;padding:6px} th{background:#f5f5f5}</style><h1>InBody Snapshot</h1><p>Date: ${todayISO()}</p><pre>${JSON.stringify(pkg.goals,null,2)}</pre><table><thead><tr><th>Date</th><th>Weight</th><th>BF%</th><th>Notes</th></tr></thead><tbody>${pkg.entries.map(e=>`<tr><td>${e.date}</td><td>${e.weightKg??''}</td><td>${e.bodyFatPct??''}</td><td>${(e.notes||'').replace(/</g,'&lt;')}</td></tr>`).join('')}</tbody></table>`; const blob=new Blob([html],{type:'text/html'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='snapshot.html'; a.click(); URL.revokeObjectURL(url) };
-
-// Settings + Theme builder + Diagnostics
-function loadSettings(){ const h=load(LS.HEIGHT,null); if(h!=null) el.height.value=h; const themeCfg=load(LS.THEMECFG,{accent:'#5b8cff',radius:18}); el.accent.value = themeCfg.accent || '#5b8cff'; el.radius.value = themeCfg.radius || 18; }
-el.saveSettings.onclick=()=>{ if(el.height.value) save(LS.HEIGHT, parseF(el.height.value)); const cfg={ accent: el.accent.value || '#5b8cff', radius: parseInt(el.radius.value||'18') }; save(LS.THEMECFG,cfg); applyThemeCfg(cfg); alert('تم الحفظ'); };
-el.clearAll.onclick=()=>{ if(confirm('مسح كل البيانات؟')){ const old=backupAll(); Object.values(LS).forEach(k=> localStorage.removeItem(k)); alert('تم المسح — لديك 15 ثانية لتراجع'); setTimeout(()=>{}, 15000); const undoBtn=document.createElement('button'); undoBtn.textContent='تراجع المسح'; undoBtn.className='ghost'; undoBtn.onclick=()=>{ restoreBackup(); undoBtn.remove() }; document.querySelector('.wrap').prepend(undoBtn) } };
-el.btnDiagnostics.onclick=()=>{ el.diagCard.style.display = (el.diagCard.style.display==='none'?'block':'none'); if(el.diagCard.style.display==='block'){ el.ua.textContent = navigator.userAgent; el.lsOK.textContent = (function(){ try{ localStorage.setItem('x','1'); localStorage.removeItem('x'); return 'OK' }catch(e){ return 'Blocked' }})(); el.notif.textContent = (('Notification' in window)? Notification.permission : 'N/A'); if('serviceWorker' in navigator){ navigator.serviceWorker.getRegistrations().then(rs=>{ el.sw.textContent = rs.length? 'Registered' : 'None' }) } else { el.sw.textContent='N/A' } } };
+// Tabs
+const views=['dashboard','add','goals','water','history','settings'];
+function show(v){ views.forEach(id=>{ const el=document.getElementById('view-'+id); if(el) el.classList.toggle('active', id===v) }); $$('.tab').forEach(t=>t.classList.toggle('active', t.dataset.view===v)); location.hash=v; if(v==='dashboard'){ renderChart() } if(v==='history'){ renderVTable() } if(v==='goals'){ renderPlanner() }}
+$$('.tab').forEach(t=> t.addEventListener('click', ()=> show(t.dataset.view)));
+window.addEventListener('hashchange', ()=> show(location.hash.replace('#','') || 'dashboard'));
 
 // Init
-function renderAll(){ renderKPIsAndInsights(); ensureCharts().then(()=>renderChart()); renderTable(); renderGoals(load(LS.GOALS,{weight:null,bodyFat:null,weekly:null,deadline:null})); renderWater(waterState()) }
-(function init(){
-  if(el.date) el.date.value=todayISO(); loadSettings(); show(location.hash.replace('#','') || 'dashboard'); renderAll();
+(async function init(){
+  await idbOpen();
+  $('#date').value=todayISO();
+  loadSettings();
+  await refreshState();
+  show(location.hash.replace('#','') || 'dashboard');
 })();
 })();
