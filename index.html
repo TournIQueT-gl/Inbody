@@ -7,13 +7,29 @@
   <title>متابعة إنبودي Ultra</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0b0e14"/>
-  <link rel="stylesheet" href="styles.css?v=51">
-  <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="styles.css?v=52">
   <script>
-    // Force-unregister any old SW then register v51
+    // Lazy load Chart.js + zoom plugin only when needed
+    async function ensureCharts(){
+      if(window.Chart) return;
+      await new Promise(r=>{ const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/chart.js'; s.onload=r; document.head.appendChild(s); });
+      await new Promise(r=>{ const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.umd.min.js'; s.onload=r; document.head.appendChild(s); });
+    }
+    // jsPDF for PDF report
+    async function ensurePDF(){ if(window.jspdf) return; await new Promise(r=>{ const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'; s.onload=r; document.head.appendChild(s); }); }
+    // SW: register and inform page on update (stale-while-revalidate)
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(rs => Promise.all(rs.map(r => r.unregister()))).then(()=>{
-        navigator.serviceWorker.register('sw.js?v=51');
+      navigator.serviceWorker.register('sw.js?v=52').then(reg=>{
+        reg.addEventListener('updatefound', ()=>{
+          const sw=reg.installing; sw.addEventListener('statechange', ()=>{
+            if(sw.state==='installed' && navigator.serviceWorker.controller){
+              window.postMessage({type:'SW_UPDATED'}, '*');
+            }
+          });
+        });
       });
     }
   </script>
@@ -22,10 +38,11 @@
 <div class="wrap">
   <div class="toolbar" style="margin:8px 4px 12px">
     <div>
-      <h1 style="margin:0">متابعة إنبودي <span style="opacity:.6">Ultra</span></h1>
+      <h1 style="margin:0"><span id="t_appName">متابعة إنبودي</span> <span style="opacity:.6">Ultra</span></h1>
       <div class="tag">PWA — يعمل دون إنترنت بعد أول مرة</div>
     </div>
     <div style="display:flex;gap:8px">
+      <button id="btnLang" class="ghost">EN</button>
       <button id="btnInstall" class="ghost">تثبيت كتطبيق</button>
       <button id="btnTheme" class="ghost">وضع: <span id="themeName">—</span></button>
     </div>
@@ -38,62 +55,67 @@
   <!-- Dashboard -->
   <section class="view" id="view-dashboard">
     <div class="kpis">
-      <div class="kpi"><div class="h">آخر وزن</div><div class="v" id="kpiWeight">—</div><div class="delta" id="deltaWeight"></div></div>
-      <div class="kpi"><div class="h">آخر دهون %</div><div class="v" id="kpiBodyFat">—</div><div class="delta" id="deltaBodyFat"></div></div>
+      <div class="kpi"><div class="h" id="t_lastWeight">آخر وزن</div><div class="v" id="kpiWeight">—</div><div class="delta" id="deltaWeight"></div></div>
+      <div class="kpi"><div class="h" id="t_lastFat">آخر دهون %</div><div class="v" id="kpiBodyFat">—</div><div class="delta" id="deltaBodyFat"></div></div>
       <div class="kpi"><div class="h">BMI</div><div class="v" id="kpiBMI">—</div></div>
-      <div class="kpi"><div class="h">التقدم نحو الهدف</div><div class="v" id="kpiGoal">—</div><div class="delta" id="deltaGoal"></div></div>
+      <div class="kpi"><div class="h" id="t_goalProg">التقدم نحو الهدف</div><div class="v" id="kpiGoal">—</div><div class="delta" id="deltaGoal"></div></div>
     </div>
     <div class="card" style="margin-top:12px">
-      <div class="title">الرسم البياني</div>
+      <div class="title" id="t_chart">الرسم البياني</div>
       <div class="chips" style="margin-bottom:8px">
-        <button class="chip active" data-range="all">الكل</button>
-        <button class="chip" data-range="90">90 يوم</button>
-        <button class="chip" data-range="30">30 يوم</button>
-        <button class="chip" data-range="7">7 أيام</button>
+        <button class="chip active" data-range="all" id="t_all">الكل</button>
+        <button class="chip" data-range="90">90</button>
+        <button class="chip" data-range="30">30</button>
+        <button class="chip" data-range="7">7</button>
         <button class="chip" id="toggleAvg">متوسط 7 أيام</button>
+        <button class="chip" id="resetZoom">إعادة ضبط التكبير</button>
       </div>
-      <canvas id="chart" height="280"></canvas>
-      <p class="tag">الوزن على المحور الأساسي، والدهون % على المحور الثانوي.</p>
+      <canvas id="chart" height="280" aria-label="Weight and Body Fat chart" role="img"></canvas>
+      <div class="search" style="margin-top:8px">
+        <button id="btnWeeklyPDF" class="ghost">📄 تقرير PDF أسبوعي</button>
+      </div>
+      <p class="tag" id="t_axes">الوزن على المحور الأساسي، والدهون % على المحور الثانوي.</p>
     </div>
   </section>
 
   <!-- Add -->
   <section class="view" id="view-add">
     <div class="card">
-      <div class="title">إضافة / تعديل قراءة</div>
+      <div class="title" id="t_addedit">إضافة / تعديل قراءة</div>
       <div class="grid">
-        <div><label>التاريخ</label><input id="date" type="date"/></div>
-        <div><label>الوزن (كجم)</label><input id="weight" type="number" inputmode="decimal" step="0.1"/></div>
-        <div><label>دهون %</label><input id="bodyFat" type="number" inputmode="decimal" step="0.1"/></div>
-        <div><label>عضلات (كجم)</label><input id="muscle" type="number" inputmode="decimal" step="0.1"/></div>
-        <div><label>ماء %</label><input id="water" type="number" inputmode="decimal" step="0.1"/></div>
-        <div><label>دهون حشوية</label><input id="visceral" type="number" inputmode="decimal" step="0.1"/></div>
-        <div><label>معدل الحرق BMR</label><input id="bmr" type="number" inputmode="numeric" step="1"/></div>
+        <div><label id="t_date">التاريخ</label><input id="date" type="date"/></div>
+        <div><label id="t_wkg">الوزن (كجم)</label><input id="weight" type="number" inputmode="decimal" step="0.1"/></div>
+        <div><label id="t_bfat">دهون %</label><input id="bodyFat" type="number" inputmode="decimal" step="0.1"/></div>
+        <div><label id="t_mkg">عضلات (كجم)</label><input id="muscle" type="number" inputmode="decimal" step="0.1"/></div>
+        <div><label id="t_waterpct">ماء %</label><input id="water" type="number" inputmode="decimal" step="0.1"/></div>
+        <div><label id="t_visc">دهون حشوية</label><input id="visceral" type="number" inputmode="decimal" step="0.1"/></div>
+        <div><label id="t_bmr">معدل الحرق BMR</label><input id="bmr" type="number" inputmode="numeric" step="1"/></div>
         <div><label>BMI</label><input id="bmi" type="text" disabled/></div>
-        <div style="grid-column: 1 / -1"><label>ملاحظات</label><textarea id="notes" rows="2" placeholder="اختياري (مثال: مرحلة تدريب/تغيير دايت)"></textarea></div>
+        <div style="grid-column: 1 / -1"><label id="t_notes">ملاحظات</label><textarea id="notes" rows="2" placeholder="اختياري"></textarea></div>
       </div>
       <div class="chips" style="margin-top:8px">
-        <button class="chip" data-preset="today">اليوم</button>
-        <button class="chip" data-preset="-1">أمس</button>
-        <button class="chip" data-preset="-7">قبل أسبوع</button>
+        <button class="chip" data-preset="today" id="t_today">اليوم</button>
+        <button class="chip" data-preset="-1" id="t_yesterday">أمس</button>
+        <button class="chip" data-preset="-7" id="t_weekago">قبل أسبوع</button>
       </div>
       <div class="search" style="margin-top:8px">
         <button id="saveBtn">حفظ القراءة</button>
         <button class="ghost" id="cancelBtn">إلغاء</button>
         <button class="ghost" id="copyLast">انسخ آخر قراءة</button>
       </div>
+      <div class="tag" id="autoCalcs">—</div>
     </div>
   </section>
 
   <!-- Goals -->
   <section class="view" id="view-goals">
     <div class="card">
-      <div class="title">أهداف اللياقة</div>
+      <div class="title" id="t_goals">أهداف اللياقة</div>
       <div class="grid">
-        <div><label>هدف الوزن (كجم)</label><input id="goalWeight" type="number" step="0.1" inputmode="decimal"/></div>
-        <div><label>هدف الدهون %</label><input id="goalBodyFat" type="number" step="0.1" inputmode="decimal"/></div>
-        <div><label>معدل التغيير الأسبوعي (كجم/أسبوع)</label><input id="goalWeekly" type="number" step="0.1" inputmode="decimal" placeholder="مثال: -0.5"/></div>
-        <div><label>موعد مستهدف (اختياري)</label><input id="goalDeadline" type="date"/></div>
+        <div><label id="t_goalWeight">هدف الوزن (كجم)</label><input id="goalWeight" type="number" step="0.1" inputmode="decimal"/></div>
+        <div><label id="t_goalBF">هدف الدهون %</label><input id="goalBodyFat" type="number" step="0.1" inputmode="decimal"/></div>
+        <div><label id="t_weekly">معدل التغيير الأسبوعي (كجم/أسبوع)</label><input id="goalWeekly" type="number" step="0.1" inputmode="decimal" placeholder="-0.5"/></div>
+        <div><label id="t_deadline">موعد مستهدف (اختياري)</label><input id="goalDeadline" type="date"/></div>
       </div>
       <div class="search" style="margin-top:8px">
         <button id="saveGoals">حفظ الأهداف</button>
@@ -106,11 +128,11 @@
   <!-- Water -->
   <section class="view" id="view-water">
     <div class="card">
-      <div class="title">ماء اليوم</div>
-      <div class="ring"><div id="waterRing" class="fill"></div><span id="waterPct">0%</span></div>
+      <div class="title" id="t_water">ماء اليوم</div>
+      <div class="ring" aria-label="نسبة إنجاز الماء"><div id="waterRing" class="fill"></div><span id="waterPct">0%</span></div>
       <div class="grid" style="margin-top:10px">
-        <div><label>هدف الماء (مل)</label><input id="waterGoal" type="number" inputmode="numeric" placeholder="مثال: 3000"/></div>
-        <div><label>المشروب الحالي (مل)</label><input id="waterCustom" type="number" inputmode="numeric" placeholder="مثال: 250"/></div>
+        <div><label id="t_waterGoal">هدف الماء (مل)</label><input id="waterGoal" type="number" inputmode="numeric" placeholder="3000"/></div>
+        <div><label id="t_currDrink">المشروب الحالي (مل)</label><input id="waterCustom" type="number" inputmode="numeric" placeholder="250"/></div>
       </div>
       <div class="chips" style="margin-top:8px">
         <button class="chip" data-add="250">+250 مل</button>
@@ -119,38 +141,38 @@
         <button class="chip" id="addCustom">+ إضافة</button>
       </div>
       <div class="card" style="margin-top:12px">
-        <div class="title">إعدادات التذكير</div>
+        <div class="title" id="t_reminder">إعدادات التذكير</div>
         <div class="grid">
-          <div><label>فاصل التذكير</label>
+          <div><label id="t_interval">فاصل التذكير</label>
             <select id="waterInterval">
               <option value="60">كل 60 دقيقة</option>
               <option value="90" selected>كل 90 دقيقة</option>
               <option value="120">كل 120 دقيقة</option>
             </select>
           </div>
-          <div><label>ساعات الصمت (من)</label><input id="quietStart" type="time" value="22:00"></div>
-          <div><label>ساعات الصمت (إلى)</label><input id="quietEnd" type="time" value="08:00"></div>
+          <div><label id="t_quietStart">ساعات الصمت (من)</label><input id="quietStart" type="time" value="22:00"></div>
+          <div><label id="t_quietEnd">ساعات الصمت (إلى)</label><input id="quietEnd" type="time" value="08:00"></div>
         </div>
       </div>
       <div class="search" style="margin-top:8px">
         <button id="waterReset" class="ghost" style="flex:1">إعادة ضبط اليوم</button>
         <button id="waterNotify" style="flex:1">تفعيل تذكير الماء</button>
       </div>
-      <p class="tag">التذكير يعمل داخل التطبيق عند فتحه. لا إشعارات خلفية.</p>
+      <p class="tag" id="t_foregroundNote">التذكير يعمل داخل التطبيق عند فتحه. لا إشعارات خلفية.</p>
       <div class="search" style="margin-top:6px">
         <button id="icsBtn" class="ghost" style="flex:1">تذكير تقويم كل ساعتين (ICS)</button>
       </div>
     </div>
   </section>
 
-  <!-- History -->
+  <!-- History (with inline edit, CSV tools, encryption) -->
   <section class="view" id="view-history">
     <div class="card">
-      <div class="title">القراءات</div>
+      <div class="title" id="t_readings">القراءات</div>
       <div class="search" style="margin-bottom:8px">
         <input id="searchNotes" placeholder="ابحث في الملاحظات..."/>
         <div class="chips">
-          <button class="chip active" data-range="all">الكل</button>
+          <button class="chip active" data-range="all" id="t_all2">الكل</button>
           <button class="chip" data-range="365">سنة</button>
           <button class="chip" data-range="90">90</button>
           <button class="chip" data-range="30">30</button>
@@ -158,47 +180,81 @@
         </div>
       </div>
       <div style="overflow-x:auto">
-        <table id="table">
+        <table id="table" aria-label="سجل القراءات">
           <thead><tr>
-            <th>التاريخ</th><th>الوزن</th><th>دهون %</th><th>عضلات</th><th>ماء %</th><th>حشوية</th><th>BMR</th><th>BMI</th><th>ملاحظات</th><th>إجراءات</th>
+            <th id="th_date">التاريخ</th><th id="th_w">الوزن</th><th id="th_bf">دهون %</th><th id="th_m">عضلات</th><th id="th_wa">ماء %</th><th id="th_v">حشوية</th><th id="th_bmr">BMR</th><th>BMI</th><th id="th_notes">ملاحظات</th><th id="th_actions">إجراءات</th>
           </tr></thead>
           <tbody></tbody>
         </table>
       </div>
-      <div class="search" style="margin-top:8px">
+      <div class="search" style="margin-top:8px;gap:12px">
         <button class="ghost" id="exportBtn">تصدير JSON</button>
+        <button class="ghost" id="exportEncBtn">تصدير مشفّر</button>
         <input type="file" id="importFile" accept="application/json" style="display:none"/>
         <button class="ghost" id="importBtn">استيراد</button>
+        <input type="file" id="importCSVFile" accept=".csv,text/csv" style="display:none"/>
+        <button class="ghost" id="importCSVBtn">استيراد CSV</button>
+        <button class="ghost" id="exportCSVBtn">تصدير CSV</button>
       </div>
     </div>
   </section>
 
-  <!-- Settings -->
+  <!-- Settings + Diagnostics -->
   <section class="view" id="view-settings">
     <div class="card">
-      <div class="title">الإعدادات</div>
+      <div class="title" id="t_settings">الإعدادات</div>
       <div class="grid">
-        <div><label>الطول (سم)</label><input id="height" type="number" inputmode="decimal" placeholder="مثال: 173"/></div>
-        <div><label>قفل PIN (اختياري)</label><input id="pin" type="password" inputmode="numeric" minlength="4" maxlength="6" placeholder="4-6 أرقام"/></div>
+        <div><label id="t_height">الطول (سم)</label><input id="height" type="number" inputmode="decimal" placeholder="173"/></div>
+        <div><label>PIN</label><input id="pin" type="password" inputmode="numeric" minlength="4" maxlength="6" placeholder="4-6"/></div>
       </div>
       <div class="search" style="margin-top:8px">
         <button id="saveSettings">حفظ الإعدادات</button>
         <button class="ghost" id="clearAll">مسح كل البيانات (تحذير)</button>
+        <button class="ghost" id="btnDiagnostics">تشخيص</button>
       </div>
-      <p class="tag">تُخزن البيانات محليًا على جهازك فقط.</p>
+      <p class="tag" id="t_localOnly">تُخزن البيانات محليًا على جهازك فقط.</p>
+    </div>
+    <div class="card" id="diagCard" style="display:none;margin-top:10px">
+      <div class="title">Diagnostics</div>
+      <div class="kv">
+        <div>UA</div><div id="ua"></div>
+        <div>localStorage</div><div id="lsOK"></div>
+        <div>Notifications</div><div id="notif"></div>
+        <div>SW</div><div id="sw"></div>
+      </div>
     </div>
   </section>
 </div>
 
-<nav class="tabs">
-  <button class="tab" data-view="dashboard">لوحة</button>
-  <button class="tab" data-view="add">إضافة</button>
-  <button class="tab" data-view="goals">أهداف</button>
-  <button class="tab" data-view="water">ماء</button>
-  <button class="tab" data-view="history">قراءات</button>
-  <button class="tab" data-view="settings">إعدادات</button>
+<nav class="tabs" role="tablist">
+  <button class="tab" data-view="dashboard" role="tab">لوحة</button>
+  <button class="tab" data-view="add" role="tab">إضافة</button>
+  <button class="tab" data-view="goals" role="tab">أهداف</button>
+  <button class="tab" data-view="water" role="tab">ماء</button>
+  <button class="tab" data-view="history" role="tab">قراءات</button>
+  <button class="tab" data-view="settings" role="tab">إعدادات</button>
 </nav>
 
-<script src="app.js?v=51"></script>
+<!-- Onboarding Modal -->
+<div class="modal" id="onboardModal" role="dialog" aria-modal="true" aria-labelledby="onbTitle">
+  <div class="box">
+    <h3 id="onbTitle">تهيئة سريعة</h3>
+    <div class="grid">
+      <div><label>الطول (سم)</label><input id="onbHeight" type="number" placeholder="173"></div>
+      <div><label>هدف الماء (مل)</label><input id="onbWater" type="number" placeholder="3000" value="3000"></div>
+      <div><label>الوزن الحالي (كجم)</label><input id="onbWeight" type="number" step="0.1"></div>
+      <div><label>هدف الوزن (كجم)</label><input id="onbGoalWeight" type="number" step="0.1"></div>
+    </div>
+    <p class="tag">هنضيف بيانات تجريبية لمدة 14 يوم عشان الجراف يبان فورًا. تقدر تمسحها لاحقًا.</p>
+    <div class="search" style="margin-top:8px">
+      <button id="onbStart">ابدأ</button>
+      <button class="ghost" id="onbSkip">تخطي</button>
+    </div>
+  </div>
+</div>
+
+<div class="snackbar" id="snack"><span id="snackMsg"></span><button id="snackUndo">تراجع</button></div>
+
+<script src="app.js?v=52"></script>
 </body>
 </html>
