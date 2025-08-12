@@ -66,3 +66,6 @@ th{color:var(--muted);text-align:right}
 .row.header{position:sticky;top:0;background:var(--card);z-index:1;font-weight:700}
 .badges{display:flex;gap:8px;flex-wrap:wrap}
 .badge{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:6px 10px;font-size:12px}
+
+.ins-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:700px){.ins-cards{grid-template-columns:1fr}}

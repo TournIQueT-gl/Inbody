@@ -256,33 +256,33 @@ let waterInterval=null; function inQuietHours(start,end,d=new Date()){ const [sh
 $('#waterNotify').onclick=async()=>{ try{ if(!('Notification' in window)) return alert('لا إشعارات'); let perm=Notification.permission; if(perm!=='granted'){ perm=await Notification.requestPermission(); } if(perm!=='granted') return; if(waterInterval){ clearInterval(waterInterval); waterInterval=null; $('#waterNotify').textContent='تفعيل تذكير الماء'; return } $('#waterNotify').textContent='إيقاف تذكير الماء'; const cfg={waterInterval:90,quietStart:'22:00',quietEnd:'08:00'}; const tick=()=>{ const now=new Date(); if(!inQuietHours(cfg.quietStart,cfg.quietEnd,now)){ try{ const s=waterState(); new Notification('اشرب ماء 💧',{ body:`${s.intake}/${s.goal} مل` }) }catch(_){ } } }; tick(); waterInterval=setInterval(tick, 90*60*1000); }catch(_){ } };
 
 // Advanced ICS
-$('#icsAdvBtn').onclick=()=>{
-  const from=$('#icsFrom').value||'09:00', to=$('#icsTo').value||'21:00', every=parseInt($('#icsEvery').value||'90');
-  const now=new Date(); const dt=now.toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
-  const ev = []
-  # noqa
-  ICS = f"""BEGIN:VCALENDAR
+
+    $('#icsAdvBtn').onclick=()=>{
+      const from=$('#icsFrom').value||'09:00', to=$('#icsTo').value||'21:00', every=parseInt($('#icsEvery').value||'90');
+      const now=new Date(); const dt=now.toISOString().replace(/[-:]/g,'').split('.')[0]+'Z';
+      const ICS = `BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//InBody Ultra 5.6//Water//AR
 BEGIN:VEVENT
-UID:{uid()}@inbody-ultra
-DTSTAMP:{dt}
+UID:${uid()}@inbody-ultra
+DTSTAMP:${dt}
 SUMMARY:اشرب ماء 💧
 RRULE:FREQ=DAILY
-DTSTART:{dt}
+DTSTART:${dt}
 DURATION:PT0M
 BEGIN:VALARM
 TRIGGER:-PT0M
 REPEAT:6
-DURATION:PT{every}M
+DURATION:PT${every}M
 ACTION:DISPLAY
 DESCRIPTION:اشرب ماء
 END:VALARM
 END:VEVENT
-END:VCALENDAR"""
-""".replace('# noqa','');
-  const blob=new Blob([ICS.replace(/\n/g,'\r\n')],{type:'text/calendar'});
-  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='water-smart.ics'; a.click(); URL.revokeObjectURL(url);
+END:VCALENDAR`;
+      const blob=new Blob([ICS.replace(/\n/g,'\r\n')],{type:'text/calendar'});
+      const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='water-smart.ics'; a.click(); URL.revokeObjectURL(url);
+    };
+
 };
 
 // ---------- Virtualized history ----------
