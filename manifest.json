@@ -1,7 +1,7 @@
 {
-  "name": "متابعة إنبودي Ultra (Safe)",
+  "name": "متابعة إنبودي Ultra",
   "short_name": "InBody Ultra",
-  "start_url": "./?v=5",
+  "start_url": "./?v=51",
   "display": "standalone",
   "background_color": "#0b0e14",
   "theme_color": "#0b0e14",

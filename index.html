@@ -1,21 +1,22 @@
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl" data-theme="dark">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"/>
-<title>متابعة إنبودي Ultra (Safe)</title>
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#0b0e14"/>
-<link rel="stylesheet" href="styles.css?v=5">
-<script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-// hard-bust old service workers on first load of v5
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(rs => Promise.all(rs.map(r => r.unregister()))).then(()=>{
-    navigator.serviceWorker.register('sw.js?v=5');
-  });
-}
-</script>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"/>
+  <title>متابعة إنبودي Ultra</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0b0e14"/>
+  <link rel="stylesheet" href="styles.css?v=51">
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // Force-unregister any old SW then register v51
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(rs => Promise.all(rs.map(r => r.unregister()))).then(()=>{
+        navigator.serviceWorker.register('sw.js?v=51');
+      });
+    }
+  </script>
 </head>
 <body>
 <div class="wrap">
@@ -30,6 +31,11 @@ if ('serviceWorker' in navigator) {
     </div>
   </div>
 
+  <div id="updateBanner" class="update-banner" style="display:none">
+    في إصدار جديد — <button id="reloadApp" class="ghost">تحديث الآن</button>
+  </div>
+
+  <!-- Dashboard -->
   <section class="view" id="view-dashboard">
     <div class="kpis">
       <div class="kpi"><div class="h">آخر وزن</div><div class="v" id="kpiWeight">—</div><div class="delta" id="deltaWeight"></div></div>
@@ -51,6 +57,7 @@ if ('serviceWorker' in navigator) {
     </div>
   </section>
 
+  <!-- Add -->
   <section class="view" id="view-add">
     <div class="card">
       <div class="title">إضافة / تعديل قراءة</div>
@@ -73,10 +80,12 @@ if ('serviceWorker' in navigator) {
       <div class="search" style="margin-top:8px">
         <button id="saveBtn">حفظ القراءة</button>
         <button class="ghost" id="cancelBtn">إلغاء</button>
+        <button class="ghost" id="copyLast">انسخ آخر قراءة</button>
       </div>
     </div>
   </section>
 
+  <!-- Goals -->
   <section class="view" id="view-goals">
     <div class="card">
       <div class="title">أهداف اللياقة</div>
@@ -94,6 +103,7 @@ if ('serviceWorker' in navigator) {
     </div>
   </section>
 
+  <!-- Water -->
   <section class="view" id="view-water">
     <div class="card">
       <div class="title">ماء اليوم</div>
@@ -108,6 +118,20 @@ if ('serviceWorker' in navigator) {
         <button class="chip" data-add="750">+750 مل</button>
         <button class="chip" id="addCustom">+ إضافة</button>
       </div>
+      <div class="card" style="margin-top:12px">
+        <div class="title">إعدادات التذكير</div>
+        <div class="grid">
+          <div><label>فاصل التذكير</label>
+            <select id="waterInterval">
+              <option value="60">كل 60 دقيقة</option>
+              <option value="90" selected>كل 90 دقيقة</option>
+              <option value="120">كل 120 دقيقة</option>
+            </select>
+          </div>
+          <div><label>ساعات الصمت (من)</label><input id="quietStart" type="time" value="22:00"></div>
+          <div><label>ساعات الصمت (إلى)</label><input id="quietEnd" type="time" value="08:00"></div>
+        </div>
+      </div>
       <div class="search" style="margin-top:8px">
         <button id="waterReset" class="ghost" style="flex:1">إعادة ضبط اليوم</button>
         <button id="waterNotify" style="flex:1">تفعيل تذكير الماء</button>
@@ -119,6 +143,7 @@ if ('serviceWorker' in navigator) {
     </div>
   </section>
 
+  <!-- History -->
   <section class="view" id="view-history">
     <div class="card">
       <div class="title">القراءات</div>
@@ -148,6 +173,7 @@ if ('serviceWorker' in navigator) {
     </div>
   </section>
 
+  <!-- Settings -->
   <section class="view" id="view-settings">
     <div class="card">
       <div class="title">الإعدادات</div>
@@ -173,6 +199,6 @@ if ('serviceWorker' in navigator) {
   <button class="tab" data-view="settings">إعدادات</button>
 </nav>
 
-<script src="safe-app.js?v=5"></script>
+<script src="app.js?v=51"></script>
 </body>
 </html>
